@@ -13,6 +13,8 @@ Drivers/**
 *.log
 PrinterManagement.log
 *.xlsx
+# Backup-PrinterState snapshots (real machine/printer names)
+PrinterStateBackups/
 
 # ---- OS/editor cruft ----
 Thumbs.db

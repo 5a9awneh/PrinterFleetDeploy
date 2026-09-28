@@ -17,6 +17,15 @@ if (-not (Get-Command -Name Get-PrinterDriver -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command -Name Set-Printer -ErrorAction SilentlyContinue)) {
     function global:Set-Printer { [CmdletBinding()] param([Parameter(Position=0)]$Name, $Location, $ErrorAction) }
 }
+if (-not (Get-Command -Name Get-Printer -ErrorAction SilentlyContinue)) {
+    function global:Get-Printer { [CmdletBinding()] param([Parameter(Position=0)]$Name, $ErrorAction) }
+}
+if (-not (Get-Command -Name Remove-Printer -ErrorAction SilentlyContinue)) {
+    function global:Remove-Printer { [CmdletBinding()] param([Parameter(Position=0)]$Name, $ErrorAction) }
+}
+if (-not (Get-Command -Name Get-PrinterPort -ErrorAction SilentlyContinue)) {
+    function global:Get-PrinterPort { [CmdletBinding()] param([Parameter(Position=0)]$Name, $ErrorAction) }
+}
 
 $env:PRINTER_MANAGEMENT_TEST_MODE = "true"
 
@@ -225,5 +234,85 @@ Describe "13. Location Wiring (Set-PrinterLocationFromCsv)" {
         Set-PrinterLocationFromCsv -Printer $printer -DryRun
 
         Should -Invoke Set-Printer -Times 0 -Exactly
+    }
+}
+
+Describe "14. Printer State Backup (Backup-PrinterState)" {
+    It "Writes a JSON snapshot containing printers, ports, and drivers" {
+        Mock Get-Printer { return @([PSCustomObject]@{ Name = "P1"; DriverName = "D1"; PortName = "192.168.1.1"; Shared = $false; Published = $false; Location = "" }) }
+        Mock Get-PrinterPort { return @([PSCustomObject]@{ Name = "192.168.1.1"; PrinterHostAddress = "192.168.1.1"; Description = "Standard TCP/IP Port" }) }
+        Mock Get-PrinterDriver { return @([PSCustomObject]@{ Name = "D1"; Manufacturer = "Test"; DriverVersion = 1 }) }
+
+        $outDir = Join-Path -Path $script:TestTempDir -ChildPath "backups"
+        $path = Backup-PrinterState -OutputDir $outDir
+
+        $path | Should -Not -BeNullOrEmpty
+        Test-Path -Path $path | Should -BeTrue
+        $content = Get-Content -Path $path -Raw | ConvertFrom-Json
+        $content.Printers.Count | Should -Be 1
+        $content.PrinterPorts.Count | Should -Be 1
+        $content.PrinterDrivers.Count | Should -Be 1
+    }
+
+    It "Handles zero installed printers without error" {
+        Mock Get-Printer { return @() }
+        Mock Get-PrinterPort { return @() }
+        Mock Get-PrinterDriver { return @() }
+
+        $outDir = Join-Path -Path $script:TestTempDir -ChildPath "backups_empty"
+        $path = Backup-PrinterState -OutputDir $outDir
+
+        $path | Should -Not -BeNullOrEmpty
+        (Get-Content -Path $path -Raw | ConvertFrom-Json).Printers.Count | Should -Be 0
+    }
+}
+
+Describe "15. Reconcile-to-Desired-State (Remove-ConflictingPrinters)" {
+    It "Removes an existing printer that matches by Name (different port)" {
+        Mock Get-Printer { return @([PSCustomObject]@{ Name = "Reception"; PortName = "10.10.1.99" }) }
+        Mock Remove-Printer { return } -Verifiable -ParameterFilter { $Name -eq "Reception" }
+
+        Remove-ConflictingPrinters -Name "Reception" -PortName "10.10.1.10"
+
+        Should -InvokeVerifiable
+    }
+
+    It "Removes an existing printer that matches by Port (different name)" {
+        Mock Get-Printer { return @([PSCustomObject]@{ Name = "Old_Reception_Name"; PortName = "10.10.1.10" }) }
+        Mock Remove-Printer { return } -Verifiable -ParameterFilter { $Name -eq "Old_Reception_Name" }
+
+        Remove-ConflictingPrinters -Name "Reception" -PortName "10.10.1.10"
+
+        Should -InvokeVerifiable
+    }
+
+    It "Removes multiple distinct conflicting printers (one by Name, one by Port)" {
+        Mock Get-Printer { return @(
+            [PSCustomObject]@{ Name = "Reception"; PortName = "10.10.1.99" }
+            [PSCustomObject]@{ Name = "Old_Reception_Name"; PortName = "10.10.1.10" }
+        ) }
+        Mock Remove-Printer { return }
+
+        Remove-ConflictingPrinters -Name "Reception" -PortName "10.10.1.10"
+
+        Should -Invoke Remove-Printer -Times 2 -Exactly
+    }
+
+    It "Does not remove printers matching neither Name nor Port" {
+        Mock Get-Printer { return @([PSCustomObject]@{ Name = "Unrelated"; PortName = "10.10.1.50" }) }
+        Mock Remove-Printer { return }
+
+        Remove-ConflictingPrinters -Name "Reception" -PortName "10.10.1.10"
+
+        Should -Invoke Remove-Printer -Times 0 -Exactly
+    }
+
+    It "-DryRun does not call Remove-Printer" {
+        Mock Get-Printer { return @([PSCustomObject]@{ Name = "Reception"; PortName = "10.10.1.99" }) }
+        Mock Remove-Printer { return }
+
+        Remove-ConflictingPrinters -Name "Reception" -PortName "10.10.1.10" -DryRun
+
+        Should -Invoke Remove-Printer -Times 0 -Exactly
     }
 }

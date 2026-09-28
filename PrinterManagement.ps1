@@ -689,6 +689,61 @@ function Install-StagedDriver {
     }
 }
 
+# Captures current Get-Printer/Get-PrinterPort/Get-PrinterDriver state to a timestamped JSON
+# file so a run of Add-Printers has a rollback reference. Read-only, always safe to call.
+function Backup-PrinterState {
+    param (
+        [string]$OutputDir = ".\PrinterStateBackups"
+    )
+
+    try {
+        if (-not (Test-Path -Path $OutputDir)) {
+            New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+        }
+
+        $snapshot = [PSCustomObject]@{
+            CapturedAt     = (Get-Date).ToString("o")
+            ComputerName   = $env:COMPUTERNAME
+            Printers       = @(Get-Printer -ErrorAction SilentlyContinue | Select-Object Name, DriverName, PortName, Shared, Published, Location)
+            PrinterPorts   = @(Get-PrinterPort -ErrorAction SilentlyContinue | Select-Object Name, PrinterHostAddress, Description)
+            PrinterDrivers = @(Get-PrinterDriver -ErrorAction SilentlyContinue | Select-Object Name, Manufacturer, DriverVersion)
+        }
+
+        $path = Join-Path -Path $OutputDir -ChildPath ("printers-backup-{0}.json" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
+        $snapshot | ConvertTo-Json -Depth 5 | Set-Content -Path $path -Encoding UTF8
+        Write-Log ("Printer state backed up to '{0}' ({1} printers)." -f $path, $snapshot.Printers.Count) "SUCCESS"
+        return $path
+    } catch {
+        Write-Log ("Failed to back up printer state: {0}" -f $_) "ERROR"
+        return $null
+    }
+}
+
+# Reconciles to desired state: removes any existing printer matching this row's Name or Port
+# (regardless of its current driver/name/port combination), so the fresh Add-Printer below
+# always succeeds instead of branching on every wrong-driver/different-name/duplicate case.
+function Remove-ConflictingPrinters {
+    param (
+        [Parameter(Mandatory = $true)] [string]$Name,
+        [Parameter(Mandatory = $true)] [string]$PortName,
+        [switch]$DryRun
+    )
+
+    $conflicts = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $Name -or $_.PortName -eq $PortName })
+    foreach ($p in $conflicts) {
+        if ($DryRun) {
+            Write-Log ("[DryRun] Would remove existing printer '{0}' (port '{1}') to reconcile with CSV" -f $p.Name, $p.PortName) "INFO"
+            continue
+        }
+        try {
+            Remove-Printer -Name $p.Name -ErrorAction Stop
+            Write-Log ("Removed existing printer '{0}' (port '{1}') to reconcile with CSV" -f $p.Name, $p.PortName) "WARN"
+        } catch {
+            Write-Log ("Failed to remove conflicting printer '{0}': {1}" -f $p.Name, $_) "ERROR"
+        }
+    }
+}
+
 # Applies Location (Windows printer property) from a normalized printer row: verbatim
 # 'Location' column wins if present, otherwise composed from Building/Floor (whichever of the
 # two is present). No-op if neither is present -- purely additive, never required upstream.
@@ -752,6 +807,11 @@ function Add-Printers {
     $total = $printerList.Count
     Write-Log ($script:T.AddStartInst -f $total) "INFO"
 
+    # PrinterFleetDeploy extension: snapshot current printer state before making any changes,
+    # so this run has a rollback reference. Read-only, so skipped only for -DryRun (nothing to
+    # protect against there).
+    if (-not $DryRun) { Backup-PrinterState | Out-Null }
+
     $index = 0
     $successCount = 0
     $failCount = 0
@@ -773,6 +833,9 @@ function Add-Printers {
                 $successCount++
                 continue
             }
+            # PrinterFleetDeploy extension: reconcile to desired state instead of branching on
+            # every wrong-driver/different-name/duplicate combination
+            Remove-ConflictingPrinters -Name $connectionPath -PortName $connectionPath -DryRun:$DryRun
             Write-Log ($script:T.AddConnNet -f $connectionPath) "INFO"
             try {
                 Add-Printer -ConnectionName $connectionPath -ErrorAction Stop
@@ -804,6 +867,11 @@ function Add-Printers {
             $failCount++
             continue
         }
+
+        # PrinterFleetDeploy extension: reconcile to desired state -- remove any existing
+        # printer matching this row's Name or Port (wrong driver, different name, duplicates,
+        # all handled the same way) so the fresh Add-Printer below always succeeds.
+        Remove-ConflictingPrinters -Name $pName -PortName $pPort -DryRun:$DryRun
 
         # Create Port if needed
         $portExists = Get-PrinterPort -Name $pPort -ErrorAction SilentlyContinue
