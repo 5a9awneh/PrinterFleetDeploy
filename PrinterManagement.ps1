@@ -563,10 +563,173 @@ function Import-SmartCsv {
     }
 }
 
+# ===========================================================================
+# PrinterFleetDeploy extensions (on top of upstream) -- driver auto-staging
+# and Location wiring. Kept separate from Import-SmartCsv/Add-Printers'
+# original logic so `git fetch upstream && git merge` stays low-conflict.
+# ===========================================================================
+
+# Reads config/driver-map.csv (Brand -> DriverName/DriverFolder). Plain Import-Csv is used
+# deliberately, NOT Import-SmartCsv -- Import-SmartCsv's Name-based row filter would silently
+# drop every row of a Brand/DriverName/DriverFolder-shaped file (verified). Lines starting with
+# '#' and blank lines are skipped so the sample file can carry explanatory comments.
+function Import-DriverMap {
+    param (
+        [string]$Path = ".\config\driver-map.csv"
+    )
+
+    if (-not (Test-Path -Path $Path -PathType Leaf)) {
+        return @{}
+    }
+
+    try {
+        $lines = Get-Content -Path $Path -Encoding UTF8 | Where-Object {
+            $_ -and -not $_.TrimStart().StartsWith('#')
+        }
+        if (-not $lines -or $lines.Count -lt 2) { return @{} }
+
+        $map = @{}
+        foreach ($row in ($lines | ConvertFrom-Csv)) {
+            if (-not [string]::IsNullOrWhiteSpace($row.Brand)) {
+                $key = $row.Brand.ToString().Trim().ToLowerInvariant()
+                $map[$key] = [PSCustomObject]@{
+                    DriverName   = if ($row.DriverName) { $row.DriverName.ToString().Trim() } else { "" }
+                    DriverFolder = if ($row.DriverFolder) { $row.DriverFolder.ToString().Trim() } else { "" }
+                }
+            }
+        }
+        return $map
+    } catch {
+        Write-Log ("Failed to read driver map '{0}': {1}" -f $Path, $_) "ERROR"
+        return @{}
+    }
+}
+
+# Resolves {DriverName, DriverFolder} for a normalized printer row. Row-level DriverName/
+# DriverFolder values always win; otherwise falls back to a case/whitespace-tolerant Brand
+# lookup in config/driver-map.csv. Returns $null (and warns) if neither resolves.
+function Resolve-PrinterDriver {
+    param (
+        [Parameter(Mandatory = $true)] $Printer,
+        [string]$DriverMapPath = ".\config\driver-map.csv"
+    )
+
+    $driverName   = $Printer.DriverName
+    $driverFolder = $Printer.DriverFolder
+
+    if ([string]::IsNullOrWhiteSpace($driverName) -and -not [string]::IsNullOrWhiteSpace($Printer.Brand)) {
+        if (-not $script:DriverMapCache) {
+            $script:DriverMapCache = Import-DriverMap -Path $DriverMapPath
+        }
+        $key = $Printer.Brand.ToString().Trim().ToLowerInvariant()
+        if ($script:DriverMapCache.ContainsKey($key)) {
+            $entry = $script:DriverMapCache[$key]
+            if ([string]::IsNullOrWhiteSpace($driverName))   { $driverName   = $entry.DriverName }
+            if ([string]::IsNullOrWhiteSpace($driverFolder)) { $driverFolder = $entry.DriverFolder }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($driverName)) {
+        Write-Log ("Could not resolve a driver for '{0}' (Brand='{1}') -- check config/driver-map.csv." -f $Printer.Name, $Printer.Brand) "WARN"
+        return $null
+    }
+
+    return [PSCustomObject]@{
+        DriverName   = $driverName
+        DriverFolder = $driverFolder
+    }
+}
+
+# Builds on upstream's existing pre-execution driver check (Get-PrinterDriver) -- same check,
+# reused as a named, reusable predicate for the new auto-staging flow.
+function Test-DriverInstalled {
+    param (
+        [Parameter(Mandatory = $true)] [string]$DriverName
+    )
+    return [bool](Get-PrinterDriver -Name $DriverName -ErrorAction SilentlyContinue)
+}
+
+# Stages a driver package from Drivers\<DriverFolder> into the driver store via pnputil.
+# /subdirs is required -- verified none of our 3 real example packages has its .inf at the
+# DriverFolder top level (they're nested under vendor-specific subfolders).
+function Install-StagedDriver {
+    param (
+        [Parameter(Mandatory = $true)] [string]$DriverFolder,
+        [switch]$DryRun
+    )
+
+    if ([string]::IsNullOrWhiteSpace($DriverFolder)) {
+        Write-Log "No DriverFolder specified -- cannot auto-stage; install the driver manually." "WARN"
+        return $false
+    }
+
+    $baseDir   = if ($PSScriptRoot) { $PSScriptRoot } else { "." }
+    $stagePath = Join-Path -Path (Join-Path -Path $baseDir -ChildPath "Drivers") -ChildPath $DriverFolder
+    $infGlob   = Join-Path -Path $stagePath -ChildPath "*.inf"
+
+    if (-not (Test-Path -Path $stagePath -PathType Container)) {
+        Write-Log ("Driver folder not found: '{0}'" -f $stagePath) "ERROR"
+        return $false
+    }
+
+    if ($DryRun) {
+        Write-Log ("[DryRun] Would run: pnputil /add-driver `"{0}`" /subdirs /install" -f $infGlob) "INFO"
+        return $true
+    }
+
+    try {
+        $output = & pnputil.exe /add-driver $infGlob /subdirs /install 2>&1
+        Write-Log ($output -join "`n") "INFO"
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        Write-Log ("pnputil failed staging '{0}': {1}" -f $stagePath, $_) "ERROR"
+        return $false
+    }
+}
+
+# Applies Location (Windows printer property) from a normalized printer row: verbatim
+# 'Location' column wins if present, otherwise composed from Building/Floor (whichever of the
+# two is present). No-op if neither is present -- purely additive, never required upstream.
+function Set-PrinterLocationFromCsv {
+    param (
+        [Parameter(Mandatory = $true)] $Printer,
+        [switch]$DryRun
+    )
+
+    $locationValue = ""
+    if (-not [string]::IsNullOrWhiteSpace($Printer.Location)) {
+        $locationValue = $Printer.Location
+    } elseif ((-not [string]::IsNullOrWhiteSpace($Printer.Building)) -or (-not [string]::IsNullOrWhiteSpace($Printer.Floor))) {
+        $parts = @()
+        if (-not [string]::IsNullOrWhiteSpace($Printer.Building)) { $parts += "Building $($Printer.Building)" }
+        if (-not [string]::IsNullOrWhiteSpace($Printer.Floor))    { $parts += "Floor $($Printer.Floor)" }
+        $locationValue = $parts -join ", "
+    }
+
+    if ([string]::IsNullOrWhiteSpace($locationValue)) {
+        return
+    }
+
+    if ($DryRun) {
+        Write-Log ("[DryRun] Would set Location='{0}' on printer '{1}'" -f $locationValue, $Printer.Name) "INFO"
+        return
+    }
+
+    try {
+        Set-Printer -Name $Printer.Name -Location $locationValue -ErrorAction Stop
+        Write-Log ("Set Location='{0}' on printer '{1}'" -f $locationValue, $Printer.Name) "SUCCESS"
+    } catch {
+        Write-Log ("Failed to set Location on '{0}': {1}" -f $Printer.Name, $_) "WARN"
+    }
+}
+
 # Function to add printers
 function Add-Printers {
     param (
-        [string]$FilePath = ""
+        [string]$FilePath = "",
+        # PrinterFleetDeploy extension: preview driver staging + printer add + Location set
+        # without making any real changes.
+        [switch]$DryRun
     )
 
     Write-Host $script:T.HeaderAdd -ForegroundColor Yellow
@@ -603,16 +766,34 @@ function Add-Printers {
         # Case 1: Shared Network Printer (UNC Path: \\server\printer)
         if ($pPort -like "\\*" -or $pName -like "\\*") {
             $connectionPath = if ($pPort -like "\\*") { $pPort } else { $pName }
+            if ($DryRun) {
+                Write-Log ("[DryRun] Would connect to shared printer: '{0}'" -f $connectionPath) "INFO"
+                $successCount++
+                continue
+            }
             Write-Log ($script:T.AddConnNet -f $connectionPath) "INFO"
             try {
                 Add-Printer -ConnectionName $connectionPath -ErrorAction Stop
                 Write-Log ($script:T.AddConnSucc -f $connectionPath) "SUCCESS"
                 $successCount++
+                # PrinterFleetDeploy extension: apply Location to UNC-connected printers too (F7)
+                Set-PrinterLocationFromCsv -Printer $printer -DryRun:$DryRun
             } catch {
                 Write-Log ($script:T.AddConnFail -f $connectionPath, $_) "ERROR"
                 $failCount++
             }
             continue
+        }
+
+        # PrinterFleetDeploy extension: resolve DriverName/DriverFolder from Brand via
+        # config/driver-map.csv BEFORE the blank-check below -- a Brand-only row (no explicit
+        # DriverName) must be resolved here, or it would be skipped as "missing data" next.
+        $resolved = Resolve-PrinterDriver -Printer $printer
+        if ($resolved) {
+            if ([string]::IsNullOrWhiteSpace($pDriver)) { $pDriver = $resolved.DriverName }
+            $pDriverFolder = $resolved.DriverFolder
+        } else {
+            $pDriverFolder = $printer.DriverFolder
         }
 
         # Case 2: Standard Printer (Local / TCP-IP)
@@ -625,6 +806,9 @@ function Add-Printers {
         # Create Port if needed
         $portExists = Get-PrinterPort -Name $pPort -ErrorAction SilentlyContinue
         if (-not $portExists) {
+            if ($DryRun) {
+                Write-Log ("[DryRun] Would create port '{0}'" -f $pPort) "INFO"
+            } else {
             try {
                 # If IPv4 address or standard TCP hostname
                 $isIpAddress = $pPort -match "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
@@ -641,21 +825,38 @@ function Add-Printers {
                 $failCount++
                 continue
             }
+            }
         }
 
-        # Verify Driver
-        $driverExists = Get-PrinterDriver -Name $pDriver -ErrorAction SilentlyContinue
+        # Verify Driver (PrinterFleetDeploy extension: auto-stage via pnputil if missing,
+        # instead of just erroring out and requiring the tech to install it manually first)
+        $driverExists = Test-DriverInstalled -DriverName $pDriver
         if (-not $driverExists) {
-            Write-Log ($script:T.AddDrvMiss -f $pDriver, $pName) "ERROR"
-            $failCount++
-            continue
+            if (-not [string]::IsNullOrWhiteSpace($pDriverFolder)) {
+                Write-Log ("Driver '{0}' not installed -- staging from Drivers\{1}..." -f $pDriver, $pDriverFolder) "WARN"
+                Install-StagedDriver -DriverFolder $pDriverFolder -DryRun:$DryRun | Out-Null
+                $driverExists = $DryRun -or (Test-DriverInstalled -DriverName $pDriver)
+            }
+            if (-not $driverExists) {
+                Write-Log ($script:T.AddDrvMiss -f $pDriver, $pName) "ERROR"
+                $failCount++
+                continue
+            }
         }
 
         # Add Printer
+        if ($DryRun) {
+            Write-Log ("[DryRun] Would install printer '{0}' on port '{1}' with driver '{2}'" -f $pName, $pPort, $pDriver) "INFO"
+            $successCount++
+            Set-PrinterLocationFromCsv -Printer $printer -DryRun:$DryRun
+            continue
+        }
         try {
             Add-Printer -Name $pName -PortName $pPort -DriverName $pDriver -ErrorAction Stop
             Write-Log ($script:T.AddInstSucc2 -f $pName, $pPort, $pDriver) "SUCCESS"
             $successCount++
+            # PrinterFleetDeploy extension: apply Location from Building/Floor/Location columns
+            Set-PrinterLocationFromCsv -Printer $printer -DryRun:$DryRun
         } catch {
             Write-Log ($script:T.AddInstFail2 -f $pName, $_) "ERROR"
             $failCount++
@@ -698,7 +899,16 @@ function Remove-Printers {
             $printersToRemove = @(Import-SmartCsv -Path $printersFile)
         } elseif ($subOption -eq "2") {
             try {
-                $installed = Get-CimInstance -ClassName Win32_Printer | Select-Object Name, PortName, DriverName
+                # PrinterFleetDeploy extension: surface Location and sort by it so a tech can
+                # visually navigate a large fleet by building/floor; falls back to plain Name
+                # sort when Location was never set (keeps upstream's behavior for minimal fleets).
+                $installed = Get-CimInstance -ClassName Win32_Printer | Select-Object Name, PortName, DriverName, Location
+                $hasLocationData = [bool]($installed | Where-Object { -not [string]::IsNullOrWhiteSpace($_.Location) })
+                if ($hasLocationData) {
+                    $installed = $installed | Sort-Object Location, Name
+                } else {
+                    $installed = $installed | Sort-Object Name
+                }
                 $selected = $installed | Out-GridView -Title $script:T.RemGridTitle -PassThru
                 if ($selected) {
                     $printersToRemove = @($selected | ForEach-Object {
