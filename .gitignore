@@ -1,0 +1,19 @@
+# ---- Real, org-specific data: never commit ----
+# Real printer inventory (see config/printers.sample.csv for the sanitized template)
+config/printers.csv
+# Real brand -> driver lookup (see config/driver-map.sample.csv for the sanitized template)
+config/driver-map.csv
+
+# ---- Vendor driver payloads: proprietary/EULA-restricted, never commit ----
+Drivers/**
+!Drivers/README.md
+
+# ---- Logs, exports, and other local run artifacts ----
+*.log
+PrinterManagement.log
+inventory.csv
+*.xlsx
+
+# ---- OS/editor cruft ----
+Thumbs.db
+.DS_Store
