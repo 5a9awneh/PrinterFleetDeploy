@@ -48,6 +48,8 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 - 🌐 **Cross-PowerShell Compatibility:** 100% pure ASCII user interface and robust encoding protection, compatible with Windows PowerShell 5.1 and modern PowerShell 7+ (pwsh).
 - 🔌 **Driver Auto-Staging:** Resolves each printer's driver by `Brand` via `config/driver-map.csv` (or an explicit per-row override), and automatically stages it from a local `Drivers/` package with `pnputil /add-driver ... /subdirs /install` when it isn't already installed.
 - 📍 **Location Wiring:** Sets the Windows printer `Location` property from a `Location` column, or composes it from `Building`/`Floor` — and the `Remove-Printers` picker sorts by `Location` so a large fleet is easy to navigate visually.
+- 🔄 **Reconcile-to-Desired-State:** Before adding a printer, removes any existing printer matching that row's `Name` **or** port (wrong driver already selected, stale entry under a different name, duplicates — all handled the same way) so the fresh install always succeeds, then re-adds it clean from the CSV.
+- 💾 **Automatic Pre-Change Backup:** `Add-Printers` snapshots the current `Get-Printer`/`Get-PrinterPort`/`Get-PrinterDriver` state to a timestamped JSON file before making any changes, as a rollback reference.
 - 🧪 **`-DryRun` Previews:** `Add-Printers -DryRun` previews every driver-staging, port-creation, printer-add, and Location-set action without changing anything on the system.
 
 ---
@@ -215,6 +217,8 @@ Automated testing is configured via **GitHub Actions** (`.github/workflows/test.
 
 ## 🛡️ Safety & Parachute Guards
 
+- 🔁 **Reconcile, Don't Branch (know this before running):** `Add-Printers` removes any existing printer matching the CSV row's `Name` or port *before* re-adding it — intentionally, so a wrong driver, a stale different-named entry, or a duplicate all get cleaned up the same simple way instead of failing. This means it's destructive by design: pending jobs and any manually-tweaked settings on a matched printer are reset when it's recreated. A pre-change backup (below) is taken automatically so this is always recoverable.
+- 💾 **Automatic Backup Before Changes:** Every real (non-`-DryRun`) `Add-Printers` run snapshots current printers/ports/drivers to a timestamped JSON file in `PrinterStateBackups/` first.
 - 🪂 **Interactive Deletion Safeguards:** Removal operations require explicit confirmation (`Y/N`) before modifying the system unless `-Force` is supplied programmatically.
 - 🔍 **Pre-Execution Driver Validation:** Verifies that the required printer driver exists locally before attempting printer creation, avoiding system errors or corrupt configurations.
 - 🧹 **Controlled Spooler Restart:** Stops the print spooler safely and ensures all pending file handles are released before purging `.SPL` / `.SHD` spool files.
