@@ -1,0 +1,9 @@
+Printer name,IP Address,Brand,DriverName,Model,Building,Floor
+Reception - Ground Floor,10.10.1.10,Canon,,Canon imageFORCE 6160,HQ,0
+Reception - Colour Copier,10.10.1.11,Canon,,Canon iR-ADV C3930,HQ,0
+Finance - Accounts,10.10.1.20,Develop/KM,,Develop ineo+ 308,HQ,2
+Finance - Shared (UNC),\\printserver01\Finance_Shared,,,,HQ,2
+HR - Wellbeing Office,10.10.1.30,Develop/KM,,bizhub C360i,HQ,-1
+Warehouse - Labels,USB001,,ZDesigner ZD420-203dpi ZPL,Zebra ZD420,Warehouse,0
+Sales - Floor 1,10.10.1.40,Sharp,,SHARP MX-3051,Annex,1
+Sales - Floor 2,10.10.1.41,Sharp,,SHARP BP-50C31,Annex,2

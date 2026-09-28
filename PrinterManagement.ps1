@@ -525,17 +525,34 @@ function Import-SmartCsv {
         $data = Import-Csv -Path $Path -Delimiter $delimiter -Encoding UTF8 -ErrorAction Stop
 
         # Normalize properties
+        # NOTE: PrinterFleetDeploy extension (on top of upstream) -- this parser is intentionally
+        # brand/model agnostic: it accepts any user's own CSV, not just the columns below. New
+        # optional columns (Brand/Model/Building/Floor/Location/DriverFolder) are passed through
+        # so Resolve-PrinterDriver and Set-PrinterLocationFromCsv can use them; they default to
+        # "" when a given CSV doesn't provide them, matching upstream's existing convention.
         $normalizedList = @()
         foreach ($row in $data) {
-            $nameVal = if ($row.Name) { $row.Name } elseif ($row.PrinterName) { $row.PrinterName } else { "" }
-            $portVal = if ($row.LocalPort) { $row.LocalPort } elseif ($row.Port) { $row.Port } elseif ($row.PortName) { $row.PortName } else { "" }
+            $nameVal   = if ($row.Name) { $row.Name } elseif ($row.PrinterName) { $row.PrinterName } elseif ($row.'Printer Name') { $row.'Printer Name' } elseif ($row.'Printer name') { $row.'Printer name' } else { "" }
+            $portVal   = if ($row.LocalPort) { $row.LocalPort } elseif ($row.Port) { $row.Port } elseif ($row.PortName) { $row.PortName } elseif ($row.'IP Address') { $row.'IP Address' } elseif ($row.IP) { $row.IP } else { "" }
             $driverVal = if ($row.DriverName) { $row.DriverName } elseif ($row.Driver) { $row.Driver } else { "" }
+            $brandVal  = if ($row.Brand) { $row.Brand } else { "" }
+            $modelVal  = if ($row.Model) { $row.Model } else { "" }
+            $folderVal = if ($row.DriverFolder) { $row.DriverFolder } else { "" }
+            $buildVal  = if ($row.Building) { $row.Building } else { "" }
+            $floorVal  = if ($row.Floor) { $row.Floor } else { "" }
+            $locVal    = if ($row.Location) { $row.Location } else { "" }
 
             if (-not [string]::IsNullOrWhiteSpace($nameVal)) {
                 $normalizedList += [PSCustomObject]@{
-                    Name       = $nameVal.ToString().Trim()
-                    LocalPort  = $portVal.ToString().Trim()
-                    DriverName = $driverVal.ToString().Trim()
+                    Name         = $nameVal.ToString().Trim()
+                    LocalPort    = $portVal.ToString().Trim()
+                    DriverName   = $driverVal.ToString().Trim()
+                    Brand        = $brandVal.ToString().Trim()
+                    Model        = $modelVal.ToString().Trim()
+                    DriverFolder = $folderVal.ToString().Trim()
+                    Building     = $buildVal.ToString().Trim()
+                    Floor        = $floorVal.ToString().Trim()
+                    Location     = $locVal.ToString().Trim()
                 }
             }
         }
@@ -952,11 +969,12 @@ function New-PrinterTemplateCsv {
     Write-Host $script:T.HeaderTmpl -ForegroundColor Yellow
 
     $sampleData = @"
-Name;LocalPort;DriverName
-Office_HP_LaserJet;192.168.1.50;HP Universal Printing PCL 6
-Finance_Canon_MFP;\\printserver01\Canon_Finance;Canon Generic Plus PCL6
-Warehouse_Zebra_Labels;USB001;ZDesigner ZD420-203dpi ZPL
-HR_Epson_WorkForce;192.168.1.55;EPSON WF-C5790 Series
+Name;LocalPort;Brand;DriverName;DriverFolder;Model;Building;Floor;Location
+Office_HP_LaserJet;192.168.1.50;;HP Universal Printing PCL 6;;HP LaserJet Pro M404;HQ;2;
+Finance_Canon_MFP;\\printserver01\Canon_Finance;;;;Canon iR-ADV C3930;HQ;3;
+Sales_Canon_Floor1;192.168.1.60;Canon;;;Canon imageFORCE 6160;HQ;1;
+Warehouse_Zebra_Labels;USB001;;ZDesigner ZD420-203dpi ZPL;;Zebra ZD420;Warehouse;0;
+HR_Epson_WorkForce;192.168.1.55;;EPSON WF-C5790 Series;;Epson WorkForce Pro;HQ;1;Building HQ, Floor 1
 "@
 
     try {
