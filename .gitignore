@@ -1,8 +1,9 @@
 # ---- Real, org-specific data: never commit ----
-# Real printer inventory (see config/printers.sample.csv for the sanitized template)
-config/printers.csv
-# Real brand -> driver lookup (see config/driver-map.sample.csv for the sanitized template)
-config/driver-map.csv
+# Wildcard-ignore every CSV anywhere in the repo (real inventories, driver maps, exports,
+# etc.), then explicitly allowlist only the sanitized sample templates.
+**/*.csv
+!config/printers.sample.csv
+!config/driver-map.sample.csv
 
 # ---- Vendor driver payloads: proprietary/EULA-restricted, never commit ----
 Drivers/**
@@ -11,7 +12,6 @@ Drivers/**
 # ---- Logs, exports, and other local run artifacts ----
 *.log
 PrinterManagement.log
-inventory.csv
 *.xlsx
 
 # ---- OS/editor cruft ----
