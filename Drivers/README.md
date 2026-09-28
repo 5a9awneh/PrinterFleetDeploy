@@ -30,11 +30,11 @@ brand-keyed lookup (`config/driver-map.csv`) usually beats listing a driver per 
 
 ## Our own local example (for reference only — not a general requirement)
 
-| Brand | Package | Real `.inf` location(s) found inside it |
+| Brand | Package | Real `.inf` location kept after trimming |
 |---|---|---|
-| Canon | Generic Plus PCL6 (`GPlus_PCL6_Driver_V340_W64_00`) | `Driver\CNP60MA64.INF`, `etc\CNP60MA64.INF`, `misc\NullDriver\lasernull.inf` |
-| Konica Minolta / Develop | Universal PCL (`GEUPDPCL6Win_3912030MU`) | `driver\win_x64\KOAWNJA_.inf` (64-bit), `driver\win_x86\KOAWNJA_.inf` (32-bit) |
-| Sharp | UD3 (`UD3_07_PCL6_2510a`) — one universal binary confirmed to cover all of our BP-50C31 / MX-3051 / MX-5051 / DX-2500N models | `PCL6\64bit\sv0emenu.inf` (64-bit), `PCL6\32bit\sv0ejenu.inf` (32-bit) |
+| Canon | Generic Plus PCL6 (`GPlus_PCL6_Driver_V340_W64_00`) | `Driver\CNP60MA64.INF` |
+| Konica Minolta / Develop | Universal PCL (`GEUPDPCL6Win_3912030MU`) | `driver\win_x64\KOAWNJA_.inf` |
+| Sharp | UD3 (`UD3_07_PCL6_2510a`) — one universal binary confirmed to cover all of our BP-50C31 / MX-3051 / MX-5051 / DX-2500N models | `PCL6\64bit\sv0emenu.inf` |
 
 Note none of these `.inf` files sit at the top level of their package folder — this is normal;
 it's exactly why `/subdirs` is required (see §6c of the project plan).
@@ -58,5 +58,9 @@ for a modern fleet):
 5. Leave whatever's left exactly where it sits (don't flatten folder structure) — `/subdirs`
    handles the traversal, so there's no need to move files around.
 
-This step is optional and can be done later — the tool works fine against an untrimmed package;
-trimming only matters for keeping the shareable project folder small.
+Our own local example fleet has already been trimmed following these exact steps (verified via
+`Install-StagedDriver -DryRun` against all 3 packages afterward, plus a full Pester re-run) —
+187MB/574 files down to ~75MB/109 files. A full pre-trim backup zip was kept outside the repo in
+case anything needs restoring. This step is optional for your own drivers and can be done
+later — the tool works fine against an untrimmed package; trimming only matters for keeping the
+shareable project folder small.
