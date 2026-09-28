@@ -11,7 +11,8 @@ param (
     [switch]$CI
 )
 
-$testsPath = Join-Path -Path $PSScriptRoot -ChildPath "PrinterManagement.Tests.ps1"
+# $PSScriptRoot itself (not a single file) so Pester auto-discovers every *.Tests.ps1 in Tests\
+$testsPath = $PSScriptRoot
 $scriptPath = Join-Path -Path $PSScriptRoot -ChildPath "..\PrinterManagement.ps1"
 
 Write-Host "===========================================================" -ForegroundColor Cyan

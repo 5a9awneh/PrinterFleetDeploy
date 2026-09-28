@@ -654,7 +654,9 @@ function Test-DriverInstalled {
 # DriverFolder top level (they're nested under vendor-specific subfolders).
 function Install-StagedDriver {
     param (
-        [Parameter(Mandatory = $true)] [string]$DriverFolder,
+        # Not Mandatory: an empty string must reach the blank-check below rather than
+        # throwing at parameter-binding time, since callers may legitimately pass "".
+        [string]$DriverFolder = "",
         [switch]$DryRun
     )
 
