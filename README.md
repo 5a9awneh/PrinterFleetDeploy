@@ -9,6 +9,12 @@
 
 Automated, robust, and enterprise-grade PowerShell automation suite for managing printers in Windows environments. Designed for System Administrators, IT Support, and DevOps to streamline bulk deployments, maintenance, diagnostics, and inventorying.
 
+> **PrinterFleetDeploy** is a fork of [IamCarron/PrinterManagement](https://github.com/IamCarron/PrinterManagement)
+> that adds transparent **driver auto-staging** (`pnputil /add-driver`) and **Location**
+> (Building/Floor) wiring on top of the original bulk-deployment tool. It is brand/model/driver
+> **agnostic** — bring your own inventory CSV, your own driver packages, and your own
+> brand→driver map, and it works the same for any organization. See [Credits & Attribution](#-credits--attribution).
+
 ---
 
 ## 📑 Table of Contents
@@ -18,9 +24,12 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 - [📋 Requirements](#-requirements)
 - [🚀 Quick Start](#-quick-start)
 - [📊 CSV File Specifications](#-csv-file-specifications)
+- [🔌 Driver Auto-Staging (`driver-map.csv`)](#-driver-auto-staging-driver-mapcsv)
+- [📍 Location Wiring](#-location-wiring)
 - [🧪 Automated Unit Tests](#-automated-unit-tests)
 - [🛡️ Safety & Parachute Guards](#️-safety--parachute-guards)
 - [🤝 Contributing](#-contributing)
+- [🙏 Credits & Attribution](#-credits--attribution)
 - [📄 License](#-license)
 
 ---
@@ -37,6 +46,9 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 - 📈 **Native Progress Bars:** Integrated `Write-Progress` tracking provides visual percentage and status updates during batch installations and test page dispatching.
 - 📜 **Centralized Activity Logging:** Every operation, warning, success, and error is recorded with timestamps in `PrinterManagement.log`.
 - 🌐 **Cross-PowerShell Compatibility:** 100% pure ASCII user interface and robust encoding protection, compatible with Windows PowerShell 5.1 and modern PowerShell 7+ (pwsh).
+- 🔌 **Driver Auto-Staging:** Resolves each printer's driver by `Brand` via `config/driver-map.csv` (or an explicit per-row override), and automatically stages it from a local `Drivers/` package with `pnputil /add-driver ... /subdirs /install` when it isn't already installed.
+- 📍 **Location Wiring:** Sets the Windows printer `Location` property from a `Location` column, or composes it from `Building`/`Floor` — and the `Remove-Printers` picker sorts by `Location` so a large fleet is easy to navigate visually.
+- 🧪 **`-DryRun` Previews:** `Add-Printers -DryRun` previews every driver-staging, port-creation, printer-add, and Location-set action without changing anything on the system.
 
 ---
 
@@ -87,53 +99,113 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 
 ### 1. Clone the Repository
 ```powershell
-git clone https://github.com/IamCarron/PrinterManagement.git
-cd PrinterManagement
+git clone <your-fork-url> PrinterFleetDeploy
+cd PrinterFleetDeploy
 ```
 
-### 2. Launch with Administrator Privileges
+### 2. Bring Your Own Data (never committed to git)
+- Copy [`config/printers.sample.csv`](config/printers.sample.csv) to `config/printers.csv` and fill in your real inventory.
+- Copy [`config/driver-map.sample.csv`](config/driver-map.sample.csv) to `config/driver-map.csv` and fill in your real `Brand → DriverName/DriverFolder` mappings (see [Driver Auto-Staging](#-driver-auto-staging-driver-mapcsv)).
+- Extract your vendors' driver packages under `Drivers/<Brand>/<PackageFolder>/` — see [`Drivers/README.md`](Drivers/README.md) for layout and sourcing guidance.
+- All of the above are covered by `.gitignore` — real inventory and driver binaries never touch git history.
+
+### 3. Launch with Administrator Privileges
 Open PowerShell as **Administrator** and run:
 ```powershell
 .\PrinterManagement.ps1
 ```
 
-### 3. Prepare Your Printer CSV
-Create a CSV file with your printers (see the [CSV File Specifications](#-csv-file-specifications) section below), or copy the sample template directly from this README.
-
 ---
 
 ## 📊 CSV File Specifications
 
-The parser automatically detects delimiters (`;`, `,`, or `\t`). Semicolon (`;`) is recommended for international Excel compatibility:
+The parser automatically detects delimiters (`;`, `,`, or `\t`) and tolerates a few common header
+aliases (`Printer Name`/`PrinterName`/`Name`, `IP Address`/`Port`/`LocalPort`). Only `Name` and
+`LocalPort` are required — every other column is optional and purely additive:
 
-| Column | Description | Example Values |
+| Column | Required? | Purpose |
 | :--- | :--- | :--- |
-| **`Name`** | Display name for the printer in Windows. | `Office_HP_LaserJet`, `Finance_Canon` |
-| **`LocalPort`** | Port identifier (IPv4 address, Hostname, UNC path, or USB). | `192.168.1.50`, `\\printserver\share`, `USB001` |
-| **`DriverName`** | Exact name of the pre-installed print driver on the host. | `HP Universal Printing PCL 6`, `Canon Generic Plus PCL6` |
+| **`Name`** | Yes | Display name for the printer in Windows. |
+| **`LocalPort`** | Yes | Port identifier (IPv4 address, hostname, UNC path, or USB/local port). |
+| **`Brand`** | No\* | Looked up in `config/driver-map.csv` to resolve `DriverName`/`DriverFolder`. |
+| **`DriverName`** | No\* | Exact registered driver name (`Get-PrinterDriver`). Overrides the `Brand` lookup if present. |
+| **`DriverFolder`** | No\* | Path under `Drivers/` to stage from if the driver isn't installed yet. Overrides the `Brand` lookup if present. |
+| **`Model`** | No | Informational only — not used in any staging/install logic. |
+| **`Building`** / **`Floor`** | No | Composed into the printer's Windows `Location` property (e.g. `Building HQ, Floor 2`). |
+| **`Location`** | No | Freeform override, used verbatim instead of composing from `Building`/`Floor`. |
 
-### Sample `template_printers.csv`:
+\*At least one of `DriverName` **or** a `Brand` resolvable via `driver-map.csv` is needed for
+driver auto-staging; if neither resolves, the printer add is skipped with a warning (or, if the
+driver's already installed, staging is simply skipped and the add proceeds normally).
+
+### Sample `printers.csv` (see [`config/printers.sample.csv`](config/printers.sample.csv)):
 ```csv
-Name;LocalPort;DriverName
-Office_HP_LaserJet;192.168.1.50;HP Universal Printing PCL 6
-Finance_Canon_MFP;\\printserver01\Canon_Finance;Canon Generic Plus PCL6
-Warehouse_Zebra_Labels;USB001;ZDesigner ZD420-203dpi ZPL
-HR_Epson_WorkForce;192.168.1.55;EPSON WF-C5790 Series
+Printer name,IP Address,Brand,DriverName,Model,Building,Floor
+Reception - Ground Floor,10.10.1.10,Canon,,Canon imageFORCE 6160,HQ,0
+Finance - Shared (UNC),\\printserver01\Finance_Shared,,,,HQ,2
+Warehouse - Labels,USB001,,ZDesigner ZD420-203dpi ZPL,Zebra ZD420,Warehouse,0
 ```
+
+---
+
+## 🔌 Driver Auto-Staging (`driver-map.csv`)
+
+Real-world driver consolidation tends to land on **one driver per brand** (most vendors now ship
+a single "universal"/"unified" PCL6 driver covering many models), so repeating a driver name on
+every CSV row is needless duplication. `config/driver-map.csv` (see
+[`config/driver-map.sample.csv`](config/driver-map.sample.csv)) maps `Brand → DriverName,DriverFolder`:
+
+```csv
+Brand,DriverName,DriverFolder
+Canon,Canon Generic Plus PCL6,Canon/GPlus_PCL6_Driver_V340_W64_00
+Develop/KM,KONICA MINOLTA Universal PCL,Konica-Develop/GEUPDPCL6Win_3912030MU
+Sharp,SHARP UD3 PCL6,Sharp/UD3_07_PCL6_2510a
+```
+
+- **`DriverName`** must be the *actual* name `Get-PrinterDriver` reports after staging on a real
+  test machine — not the vendor's marketing/filename — since this is genuinely
+  environment-specific.
+- **`DriverFolder`** is a path relative to `Drivers/` (the top-level extracted package folder, not
+  the exact `.inf` path) — see [`Drivers/README.md`](Drivers/README.md) for layout and sourcing.
+- Matching on `Brand` is case/whitespace-tolerant, and a row's own `DriverName`/`DriverFolder`
+  always wins over the `Brand` lookup.
+- When a printer's driver isn't already installed, `Add-Printers` automatically runs
+  `pnputil /add-driver "Drivers\<Folder>\*.inf" /subdirs /install` before creating the printer —
+  no manual pre-staging step required. Use `Add-Printers -DryRun` to preview exactly what would be
+  staged/installed/located without making any changes.
+
+---
+
+## 📍 Location Wiring
+
+If a CSV row has a `Location` value, it's applied verbatim; otherwise, if it has `Building`
+and/or `Floor`, those are composed into `"Building X, Floor Y"` (or just whichever of the two is
+present) and set via `Set-Printer -Location`. This runs after a successful `Add-Printer` for both
+shared/UNC and standard TCP/USB printers, and is purely additive — no-op when none of the three
+columns are present.
+
+The interactive picker in `Remove-Printers` (option `[2]`) also surfaces each installed printer's
+`Location` and sorts the list by it, so you can navigate a large fleet by building/floor instead
+of scrolling an alphabetical `Name` list (falls back to plain `Name` sort if `Location` was never
+set on any printer).
 
 ---
 
 ## 🧪 Automated Unit Tests
 
-The repository includes a comprehensive unit and integration test suite built with **Pester 5+** located in `Tests/`.
+The repository includes a comprehensive unit and integration test suite built with **Pester 5+**
+located in `Tests/`: the inherited baseline suite (`PrinterManagement.Tests.ps1`) plus
+`DriverStaging.Tests.ps1`, which covers the driver-map resolution, auto-staging, and Location
+wiring added by this fork — entirely via mocks, with no real `pnputil`/driver-store/`Set-Printer`
+calls.
 
 ### Running Tests Locally:
 ```powershell
-# Automated test runner (installs Pester automatically if not present):
+# Automated test runner (installs Pester automatically if not present, discovers all *.Tests.ps1):
 .\Tests\Run-Tests.ps1
 
 # Or run directly via Pester:
-Invoke-Pester .\Tests\PrinterManagement.Tests.ps1 -Output Detailed
+Invoke-Pester .\Tests\ -Output Detailed
 ```
 
 ### Continuous Integration (CI):
@@ -160,6 +232,17 @@ Contributions, issues, and feature requests are welcome!
 3. Commit your Changes (`git commit -m 'feat: add some amazing feature'`).
 4. Push to the Branch (`git push origin feature/AmazingFeature`).
 5. Open a Pull Request.
+
+---
+
+## 🙏 Credits & Attribution
+
+This project is a fork of [**IamCarron/PrinterManagement**](https://github.com/IamCarron/PrinterManagement)
+(Apache License 2.0) — all of the core bulk-install/remove, test-page dispatch, spooler-purge,
+inventory, and CSV-parsing functionality originates there. This fork layers driver auto-staging
+and Location wiring on top, kept additive and low-conflict with future
+`git fetch upstream && git merge`. See [NOTICE.md](NOTICE.md) for the full attribution statement
+required by the Apache License.
 
 ---
 
