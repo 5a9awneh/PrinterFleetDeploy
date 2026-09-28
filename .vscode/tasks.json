@@ -1,0 +1,60 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Pester baseline tests",
+			"type": "shell",
+			"command": "powershell.exe",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				".\\Tests\\Run-Tests.ps1"
+			],
+			"isBackground": false,
+			"group": "test"
+		},
+		{
+			"label": "Run Pester baseline tests (no stdin)",
+			"type": "shell",
+			"command": "powershell.exe -NoProfile -Command \".\\Tests\\Run-Tests.ps1\" < NUL",
+			"args": [],
+			"isBackground": false,
+			"group": "test"
+		},
+		{
+			"label": "Run Pester baseline (cmd redirect)",
+			"type": "shell",
+			"command": "cmd.exe /c \"powershell.exe -NoProfile -Command .\\Tests\\Run-Tests.ps1 < NUL\"",
+			"args": [],
+			"isBackground": false,
+			"group": "test"
+		},
+		{
+			"label": "Run Pester baseline (cmd redirect v2)",
+			"type": "shell",
+			"command": "cmd.exe",
+			"args": [
+				"/c",
+				"powershell.exe -NoProfile -Command .\\Tests\\Run-Tests.ps1 < NUL"
+			],
+			"isBackground": false,
+			"group": "test"
+		},
+		{
+			"label": "Check PrinterFleetDeploy git state",
+			"type": "shell",
+			"command": "git log --oneline -8 && echo --- && git status --short && echo --- && git status --ignored --short",
+			"args": [],
+			"isBackground": false,
+			"group": "none"
+		},
+		{
+			"label": "Check PrinterFleetDeploy git state v2",
+			"type": "shell",
+			"command": "git log --oneline -8; Write-Host '---STATUS---'; git status --short; Write-Host '---IGNORED---'; git status --ignored --short",
+			"args": [],
+			"isBackground": false,
+			"group": "none"
+		}
+	]
+}
