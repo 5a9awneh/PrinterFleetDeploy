@@ -722,6 +722,9 @@ function Backup-PrinterState {
 # Reconciles to desired state: removes any existing printer matching this row's Name or Port
 # (regardless of its current driver/name/port combination), so the fresh Add-Printer below
 # always succeeds instead of branching on every wrong-driver/different-name/duplicate case.
+# Also matches on resolved PrinterHostAddress, not just the port's own Name string -- legacy
+# tooling (e.g. PrinterLogic's "IP_x.x.x.x" port names) can point a differently-named port at
+# the exact same host our CSV's raw-IP port name targets, which a Name-only comparison misses.
 function Remove-ConflictingPrinters {
     param (
         [Parameter(Mandatory = $true)] [string]$Name,
@@ -729,7 +732,11 @@ function Remove-ConflictingPrinters {
         [switch]$DryRun
     )
 
-    $conflicts = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq $Name -or $_.PortName -eq $PortName })
+    $conflicts = @(Get-Printer -ErrorAction SilentlyContinue | Where-Object {
+        if ($_.Name -eq $Name -or $_.PortName -eq $PortName) { return $true }
+        $hostAddress = (Get-PrinterPort -Name $_.PortName -ErrorAction SilentlyContinue).PrinterHostAddress
+        return ($hostAddress -and $hostAddress -eq $PortName)
+    })
     foreach ($p in $conflicts) {
         if ($DryRun) {
             Write-Log ("[DryRun] Would remove existing printer '{0}' (port '{1}') to reconcile with CSV" -f $p.Name, $p.PortName) "INFO"

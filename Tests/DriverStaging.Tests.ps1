@@ -307,6 +307,16 @@ Describe "15. Reconcile-to-Desired-State (Remove-ConflictingPrinters)" {
         Should -Invoke Remove-Printer -Times 0 -Exactly
     }
 
+    It "Removes a printer whose differently-named port resolves to the same host address (e.g. PrinterLogic-style 'IP_x.x.x.x' ports)" {
+        Mock Get-Printer { return @([PSCustomObject]@{ Name = "HQA-Legacy-Name"; PortName = "IP_10.10.1.10" }) }
+        Mock Get-PrinterPort { return [PSCustomObject]@{ Name = "IP_10.10.1.10"; PrinterHostAddress = "10.10.1.10" } } -ParameterFilter { $Name -eq "IP_10.10.1.10" }
+        Mock Remove-Printer { return } -Verifiable -ParameterFilter { $Name -eq "HQA-Legacy-Name" }
+
+        Remove-ConflictingPrinters -Name "Reception" -PortName "10.10.1.10"
+
+        Should -InvokeVerifiable
+    }
+
     It "-DryRun does not call Remove-Printer" {
         Mock Get-Printer { return @([PSCustomObject]@{ Name = "Reception"; PortName = "10.10.1.99" }) }
         Mock Remove-Printer { return }
