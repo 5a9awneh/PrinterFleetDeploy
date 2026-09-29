@@ -441,7 +441,10 @@ function Get-ValidFilePath {
     param (
         [string]$FilePath = "",
         [string]$Title = "Select Printer CSV File",
-        [string]$Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*"
+        [string]$Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*",
+        # PrinterFleetDeploy extension: if set and it exists, offer it as a one-key default
+        # instead of always prompting/opening a GUI browse -- e.g. config/printers.csv.
+        [string]$DefaultPath = ""
     )
 
     if (-not [string]::IsNullOrWhiteSpace($FilePath)) {
@@ -451,6 +454,23 @@ function Get-ValidFilePath {
         }
         Write-Log ($script:T.GetPathNoExist -f $clean) "ERROR"
         return $null
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($DefaultPath) -and (Test-Path -Path $DefaultPath -PathType Leaf)) {
+        Write-Host ("Detected default CSV: '{0}'" -f $DefaultPath) -ForegroundColor Cyan
+        $useDefault = Read-Host "Press Enter to use it, or type a different path/'b' to browse"
+        if ([string]::IsNullOrWhiteSpace($useDefault)) {
+            return (Resolve-Path -Path $DefaultPath).Path
+        }
+        if ($useDefault -notmatch '^(b|browse)$') {
+            $cleanDefault = $useDefault.Trim('"').Trim("'")
+            if (Test-Path -Path $cleanDefault -PathType Leaf) {
+                return (Resolve-Path -Path $cleanDefault).Path
+            }
+            Write-Log ($script:T.GetPathNoExist -f $cleanDefault) "ERROR"
+            return $null
+        }
+        # 'b'/'browse' falls through to the normal GUI/CLI prompt flow below
     }
 
     Write-Host $script:T.SelCSV -ForegroundColor Yellow
@@ -577,7 +597,11 @@ function Import-SmartCsv {
 # '#' and blank lines are skipped so the sample file can carry explanatory comments.
 function Import-DriverMap {
     param (
-        [string]$Path = ".\config\driver-map.csv"
+        # $PSScriptRoot-based, not cwd-relative -- a UAC-elevated relaunch (e.g. via RUN.cmd)
+        # resets the working directory to System32 unless -WorkingDirectory is set, which broke
+        # this default silently (confirmed live: real installs failed fleet-wide when launched
+        # this way, since every Brand-based row lost its driver-map lookup).
+        [string]$Path = (Join-Path -Path $(if ($PSScriptRoot) { $PSScriptRoot } else { "." }) -ChildPath "config\driver-map.csv")
     )
 
     if (-not (Test-Path -Path $Path -PathType Leaf)) {
@@ -613,7 +637,7 @@ function Import-DriverMap {
 function Resolve-PrinterDriver {
     param (
         [Parameter(Mandatory = $true)] $Printer,
-        [string]$DriverMapPath = ".\config\driver-map.csv"
+        [string]$DriverMapPath = (Join-Path -Path $(if ($PSScriptRoot) { $PSScriptRoot } else { "." }) -ChildPath "config\driver-map.csv")
     )
 
     $driverName   = $Printer.DriverName
@@ -859,7 +883,8 @@ function Add-Printers {
 
     Write-Host $script:T.HeaderAdd -ForegroundColor Yellow
 
-    $printersFile = Get-ValidFilePath -FilePath $FilePath -Title $script:T.AddTitleCSV
+    $defaultPrintersCsv = Join-Path -Path $(if ($PSScriptRoot) { $PSScriptRoot } else { "." }) -ChildPath "config\printers.csv"
+    $printersFile = Get-ValidFilePath -FilePath $FilePath -Title $script:T.AddTitleCSV -DefaultPath $defaultPrintersCsv
     if (-not $printersFile) {
         if (-not $FilePath) { Read-Host -Prompt $script:T.PressEnter }
         return @{ Total = 0; Success = 0; Failed = 0 }
@@ -1387,7 +1412,13 @@ function Start-PrinterManagement {
     if (-not $isAdmin) {
         Write-Host "`n$($script:T.AdminError)" -ForegroundColor Red
         Write-Host "$($script:T.AdminPrompt)`n" -ForegroundColor Yellow
-        Read-Host -Prompt $script:T.PressEnterToExit
+        # PrinterFleetDeploy extension: readable timed auto-exit instead of an indefinite
+        # Read-Host wait, so a double-click launch (e.g. via RUN.cmd) doesn't sit forever.
+        for ($i = 5; $i -ge 1; $i--) {
+            Write-Host "`rClosing in $i... " -NoNewline -ForegroundColor DarkGray
+            Start-Sleep -Seconds 1
+        }
+        Write-Host ""
         return
     }
 

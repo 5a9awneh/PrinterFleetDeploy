@@ -1,2 +1,2 @@
 @echo off
-powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "Start-Process powershell.exe -ArgumentList '-ExecutionPolicy Bypass -NoProfile -File \"%~dp0PrinterManagement.ps1\"' -Verb RunAs"
+powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "try { Start-Process powershell.exe -ArgumentList '-ExecutionPolicy Bypass -NoProfile -File \"%~dp0PrinterManagement.ps1\"' -WorkingDirectory '%~dp0' -Verb RunAs -ErrorAction Stop } catch { Write-Host ''; Write-Host '[!] Administrator elevation was denied or failed.' -ForegroundColor Red; Write-Host 'PrinterManagement requires administrator privileges to run.' -ForegroundColor Yellow; Write-Host ''; Start-Sleep -Seconds 5 }"
