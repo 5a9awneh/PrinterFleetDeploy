@@ -649,7 +649,10 @@ function Test-DriverInstalled {
     return [bool](Get-PrinterDriver -Name $DriverName -ErrorAction SilentlyContinue)
 }
 
-# Stages a driver package from Drivers\<DriverFolder> into the driver store via pnputil.
+# Stages a driver package from Drivers\<DriverFolder> into the driver store via pnputil, then
+# registers it with the Print Spooler via Add-PrinterDriver -- confirmed live that pnputil alone
+# only stages into the Windows Driver Store; Get-PrinterDriver/Add-Printer -DriverName can't see
+# or use it until Add-PrinterDriver -Name publishes it, even though pnputil reports success.
 # /subdirs is required -- verified none of our 3 real example packages has its .inf at the
 # DriverFolder top level (they're nested under vendor-specific subfolders).
 function Install-StagedDriver {
@@ -657,6 +660,7 @@ function Install-StagedDriver {
         # Not Mandatory: an empty string must reach the blank-check below rather than
         # throwing at parameter-binding time, since callers may legitimately pass "".
         [string]$DriverFolder = "",
+        [string]$DriverName = "",
         [switch]$DryRun
     )
 
@@ -676,15 +680,32 @@ function Install-StagedDriver {
 
     if ($DryRun) {
         Write-Log ("[DryRun] Would run: pnputil /add-driver `"{0}`" /subdirs /install" -f $infGlob) "INFO"
+        if (-not [string]::IsNullOrWhiteSpace($DriverName)) {
+            Write-Log ("[DryRun] Would register driver '{0}' with the print spooler (Add-PrinterDriver)" -f $DriverName) "INFO"
+        }
         return $true
     }
 
     try {
         $output = & pnputil.exe /add-driver $infGlob /subdirs /install 2>&1
         Write-Log ($output -join "`n") "INFO"
-        return ($LASTEXITCODE -eq 0)
+        if ($LASTEXITCODE -ne 0) { return $false }
     } catch {
         Write-Log ("pnputil failed staging '{0}': {1}" -f $stagePath, $_) "ERROR"
+        return $false
+    }
+
+    if ([string]::IsNullOrWhiteSpace($DriverName)) {
+        Write-Log "Driver staged into the driver store, but no DriverName given -- cannot register it with the print spooler." "WARN"
+        return $false
+    }
+
+    try {
+        Add-PrinterDriver -Name $DriverName -ErrorAction Stop
+        Write-Log ("Registered driver '{0}' with the print spooler." -f $DriverName) "SUCCESS"
+        return $true
+    } catch {
+        Write-Log ("Failed to register driver '{0}' with the print spooler: {1}" -f $DriverName, $_) "ERROR"
         return $false
     }
 }
@@ -911,7 +932,7 @@ function Add-Printers {
         if (-not $driverExists) {
             if (-not [string]::IsNullOrWhiteSpace($pDriverFolder)) {
                 Write-Log ("Driver '{0}' not installed -- staging from Drivers\{1}..." -f $pDriver, $pDriverFolder) "WARN"
-                Install-StagedDriver -DriverFolder $pDriverFolder -DryRun:$DryRun | Out-Null
+                Install-StagedDriver -DriverFolder $pDriverFolder -DriverName $pDriver -DryRun:$DryRun | Out-Null
                 $driverExists = $DryRun -or (Test-DriverInstalled -DriverName $pDriver)
             }
             if (-not $driverExists) {

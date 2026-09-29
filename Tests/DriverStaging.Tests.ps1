@@ -14,6 +14,9 @@
 if (-not (Get-Command -Name Get-PrinterDriver -ErrorAction SilentlyContinue)) {
     function global:Get-PrinterDriver { [CmdletBinding()] param([Parameter(Position=0)]$Name, $ErrorAction) }
 }
+if (-not (Get-Command -Name Add-PrinterDriver -ErrorAction SilentlyContinue)) {
+    function global:Add-PrinterDriver { [CmdletBinding()] param([Parameter(Position=0)]$Name, $InfPath, $ErrorAction) }
+}
 if (-not (Get-Command -Name Set-Printer -ErrorAction SilentlyContinue)) {
     function global:Set-Printer { [CmdletBinding()] param([Parameter(Position=0)]$Name, $Location, $ErrorAction) }
 }
@@ -168,13 +171,14 @@ Describe "12. Driver Auto-Staging (Install-StagedDriver)" {
         Should -Invoke pnputil.exe -Times 0 -Exactly
     }
 
-    It "Invokes pnputil with /subdirs /install and returns `$true on success" {
+    It "Invokes pnputil with /subdirs /install, then registers the driver with Add-PrinterDriver, returning `$true on success" {
         Mock Test-Path { return $true } -ParameterFilter { $Path -like "*DriverStagingUnitTest*" }
         Mock pnputil.exe { $global:LASTEXITCODE = 0; "driver added successfully" } -Verifiable -ParameterFilter {
             ($args -contains "/subdirs") -and ($args -contains "/install") -and ($args -contains "/add-driver")
         }
+        Mock Add-PrinterDriver { return } -Verifiable -ParameterFilter { $Name -eq "Test Driver Name" }
 
-        $result = Install-StagedDriver -DriverFolder "DriverStagingUnitTest\SomeModel"
+        $result = Install-StagedDriver -DriverFolder "DriverStagingUnitTest\SomeModel" -DriverName "Test Driver Name"
 
         $result | Should -BeTrue
         Should -InvokeVerifiable
@@ -184,7 +188,28 @@ Describe "12. Driver Auto-Staging (Install-StagedDriver)" {
         Mock Test-Path { return $true } -ParameterFilter { $Path -like "*DriverStagingUnitTest*" }
         Mock pnputil.exe { $global:LASTEXITCODE = 1; "some pnputil error" }
 
+        $result = Install-StagedDriver -DriverFolder "DriverStagingUnitTest\SomeModel" -DriverName "Test Driver Name"
+
+        $result | Should -BeFalse
+    }
+
+    It "Returns `$false and warns when pnputil succeeds but no DriverName was given to register" {
+        Mock Test-Path { return $true } -ParameterFilter { $Path -like "*DriverStagingUnitTest*" }
+        Mock pnputil.exe { $global:LASTEXITCODE = 0; "driver added successfully" }
+        Mock Add-PrinterDriver { return }
+
         $result = Install-StagedDriver -DriverFolder "DriverStagingUnitTest\SomeModel"
+
+        $result | Should -BeFalse
+        Should -Invoke Add-PrinterDriver -Times 0 -Exactly
+    }
+
+    It "Returns `$false when Add-PrinterDriver registration fails after successful staging" {
+        Mock Test-Path { return $true } -ParameterFilter { $Path -like "*DriverStagingUnitTest*" }
+        Mock pnputil.exe { $global:LASTEXITCODE = 0; "driver added successfully" }
+        Mock Add-PrinterDriver { throw "spooler registration failed" }
+
+        $result = Install-StagedDriver -DriverFolder "DriverStagingUnitTest\SomeModel" -DriverName "Test Driver Name"
 
         $result | Should -BeFalse
     }
