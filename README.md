@@ -26,6 +26,7 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 - [📊 CSV File Specifications](#-csv-file-specifications)
 - [🔌 Driver Auto-Staging (`driver-map.csv`)](#-driver-auto-staging-driver-mapcsv)
 - [📍 Location Wiring](#-location-wiring)
+- [� Duplex Printing](#-duplex-printing)
 - [🧪 Automated Unit Tests](#-automated-unit-tests)
 - [🛡️ Safety & Parachute Guards](#️-safety--parachute-guards)
 - [🤝 Contributing](#-contributing)
@@ -50,6 +51,7 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 - 📍 **Location Wiring:** Sets the Windows printer `Location` property from a `Location` column, or composes it from `Building`/`Floor` — and the `Remove-Printers` picker sorts by `Location` so a large fleet is easy to navigate visually.
 - 🔄 **Reconcile-to-Desired-State:** Before adding a printer, removes any existing printer matching that row's `Name` **or** port (wrong driver already selected, stale entry under a different name, duplicates — all handled the same way) so the fresh install always succeeds, then re-adds it clean from the CSV.
 - 💾 **Automatic Pre-Change Backup:** `Add-Printers` snapshots the current `Get-Printer`/`Get-PrinterPort`/`Get-PrinterDriver` state to a timestamped JSON file before making any changes, as a rollback reference.
+- � **Default Duplex Printing:** Sets each printer's default print preference to two-sided (`TwoSidedLongEdge`) via `Set-PrintConfiguration` — driver-agnostic, works the same across brands — with a per-row `Duplex` column override (`ShortEdge`/`Simplex`) for exceptions like label printers.
 - 🧪 **`-DryRun` Previews:** `Add-Printers -DryRun` previews every driver-staging, port-creation, printer-add, and Location-set action without changing anything on the system.
 
 ---
@@ -139,6 +141,7 @@ aliases (`Printer Name`/`PrinterName`/`Name`, `IP Address`/`Port`/`LocalPort`). 
 | **`Model`** | No | Informational only — not used in any staging/install logic. |
 | **`Building`** / **`Floor`** | No | Composed into the printer's Windows `Location` property (e.g. `Building HQ, Floor 2`). |
 | **`Location`** | No | Freeform override, used verbatim instead of composing from `Building`/`Floor`. |
+| **`Duplex`** | No | Default print preference. Blank = `TwoSidedLongEdge` (two-sided). `ShortEdge` or `Simplex`/`Off` per row for exceptions like label printers. |
 
 \*At least one of `DriverName` **or** a `Brand` resolvable via `driver-map.csv` is needed for
 driver auto-staging; if neither resolves, the printer add is skipped with a warning (or, if the
@@ -146,10 +149,10 @@ driver's already installed, staging is simply skipped and the add proceeds norma
 
 ### Sample `printers.csv` (see [`config/printers.sample.csv`](config/printers.sample.csv)):
 ```csv
-Printer name,IP Address,Brand,DriverName,Model,Building,Floor
-Reception - Ground Floor,10.10.1.10,Canon,,Canon imageFORCE 6160,HQ,0
-Finance - Shared (UNC),\\printserver01\Finance_Shared,,,,HQ,2
-Warehouse - Labels,USB001,,ZDesigner ZD420-203dpi ZPL,Zebra ZD420,Warehouse,0
+Printer name,IP Address,Brand,DriverName,Model,Building,Floor,Duplex
+Reception - Ground Floor,10.10.1.10,Canon,,Canon imageFORCE 6160,HQ,0,
+Finance - Shared (UNC),\\printserver01\Finance_Shared,,,,HQ,2,
+Warehouse - Labels,USB001,,ZDesigner ZD420-203dpi ZPL,Zebra ZD420,Warehouse,0,Simplex
 ```
 
 ---
@@ -194,6 +197,24 @@ The interactive picker in `Remove-Printers` (option `[2]`) also surfaces each in
 `Location` and sorts the list by it, so you can navigate a large fleet by building/floor instead
 of scrolling an alphabetical `Name` list (falls back to plain `Name` sort if `Location` was never
 set on any printer).
+
+---
+
+## � Duplex Printing
+
+Every printer defaults to two-sided printing (`TwoSidedLongEdge`) via `Set-PrintConfiguration` —
+this is a Print Spooler/Print Ticket setting, not something driver-specific, so it works
+identically across brands. Add a `Duplex` column to override per row:
+
+| Value | Result |
+| :--- | :--- |
+| *(blank)* | `TwoSidedLongEdge` (default) |
+| `ShortEdge` | `TwoSidedShortEdge` (short-edge binding) |
+| `Simplex` / `Off` | `OneSided` — use for devices with no physical duplexer, e.g. label printers |
+
+Matching is case/whitespace-tolerant. An unrecognized value logs a warning and leaves the
+driver's own default untouched; a device that can't honor the requested mode (no duplex
+hardware) also just warns — it never fails the printer's install.
 
 ---
 

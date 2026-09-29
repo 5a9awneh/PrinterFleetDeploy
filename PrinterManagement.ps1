@@ -541,6 +541,7 @@ function Import-SmartCsv {
             $buildVal  = if ($row.Building) { $row.Building } else { "" }
             $floorVal  = if ($row.Floor) { $row.Floor } else { "" }
             $locVal    = if ($row.Location) { $row.Location } else { "" }
+            $duplexVal = if ($row.Duplex) { $row.Duplex } else { "" }
 
             if (-not [string]::IsNullOrWhiteSpace($nameVal)) {
                 $normalizedList += [PSCustomObject]@{
@@ -553,6 +554,7 @@ function Import-SmartCsv {
                     Building     = $buildVal.ToString().Trim()
                     Floor        = $floorVal.ToString().Trim()
                     Location     = $locVal.ToString().Trim()
+                    Duplex       = $duplexVal.ToString().Trim()
                 }
             }
         }
@@ -808,6 +810,44 @@ function Set-PrinterLocationFromCsv {
     }
 }
 
+# Sets default duplex printing preference (Print Spooler-level, driver-agnostic) from a
+# normalized printer row's 'Duplex' column: blank defaults to TwoSidedLongEdge (matches
+# PrinterLogic's prior fleet-wide default); 'ShortEdge'/'Simplex'/'Off' override per row for
+# exceptions like label printers that don't have a physical duplexer. Failure is only a warning,
+# not a row failure -- a device without duplex hardware legitimately can't honor this.
+function Set-PrinterDuplexFromCsv {
+    param (
+        [Parameter(Mandatory = $true)] $Printer,
+        [switch]$DryRun
+    )
+
+    $duplexValue = if ($Printer.Duplex) { $Printer.Duplex.ToString().Trim().ToLowerInvariant() } else { "" }
+    $duplexingMode = switch -Regex ($duplexValue) {
+        '^(simplex|off|none|onesided)$' { "OneSided"; break }
+        '^(shortedge|short)$'           { "TwoSidedShortEdge"; break }
+        '^(longedge|long|duplex)$'      { "TwoSidedLongEdge"; break }
+        '^$'                            { "TwoSidedLongEdge"; break }
+        default                         { $null }
+    }
+
+    if (-not $duplexingMode) {
+        Write-Log ("Unrecognized Duplex value '{0}' on printer '{1}' -- leaving driver default." -f $Printer.Duplex, $Printer.Name) "WARN"
+        return
+    }
+
+    if ($DryRun) {
+        Write-Log ("[DryRun] Would set DuplexingMode='{0}' on printer '{1}'" -f $duplexingMode, $Printer.Name) "INFO"
+        return
+    }
+
+    try {
+        Set-PrintConfiguration -PrinterName $Printer.Name -DuplexingMode $duplexingMode -ErrorAction Stop
+        Write-Log ("Set DuplexingMode='{0}' on printer '{1}'" -f $duplexingMode, $Printer.Name) "SUCCESS"
+    } catch {
+        Write-Log ("Could not set DuplexingMode on '{0}' (device may not support it): {1}" -f $Printer.Name, $_) "WARN"
+    }
+}
+
 # Function to add printers
 function Add-Printers {
     param (
@@ -871,6 +911,7 @@ function Add-Printers {
                 $successCount++
                 # PrinterFleetDeploy extension: apply Location to UNC-connected printers too (F7)
                 Set-PrinterLocationFromCsv -Printer $printer -DryRun:$DryRun
+                Set-PrinterDuplexFromCsv -Printer $printer -DryRun:$DryRun
             } catch {
                 Write-Log ($script:T.AddConnFail -f $connectionPath, $_) "ERROR"
                 $failCount++
@@ -947,6 +988,7 @@ function Add-Printers {
             Write-Log ("[DryRun] Would install printer '{0}' on port '{1}' with driver '{2}'" -f $pName, $pPort, $pDriver) "INFO"
             $successCount++
             Set-PrinterLocationFromCsv -Printer $printer -DryRun:$DryRun
+            Set-PrinterDuplexFromCsv -Printer $printer -DryRun:$DryRun
             continue
         }
         try {
@@ -955,6 +997,7 @@ function Add-Printers {
             $successCount++
             # PrinterFleetDeploy extension: apply Location from Building/Floor/Location columns
             Set-PrinterLocationFromCsv -Printer $printer -DryRun:$DryRun
+            Set-PrinterDuplexFromCsv -Printer $printer -DryRun:$DryRun
         } catch {
             Write-Log ($script:T.AddInstFail2 -f $pName, $_) "ERROR"
             $failCount++
@@ -1277,12 +1320,12 @@ function New-PrinterTemplateCsv {
     Write-Host $script:T.HeaderTmpl -ForegroundColor Yellow
 
     $sampleData = @"
-Name;LocalPort;Brand;DriverName;DriverFolder;Model;Building;Floor;Location
-Office_HP_LaserJet;192.168.1.50;;HP Universal Printing PCL 6;;HP LaserJet Pro M404;HQ;2;
-Finance_Canon_MFP;\\printserver01\Canon_Finance;;;;Canon iR-ADV C3930;HQ;3;
-Sales_Canon_Floor1;192.168.1.60;Canon;;;Canon imageFORCE 6160;HQ;1;
-Warehouse_Zebra_Labels;USB001;;ZDesigner ZD420-203dpi ZPL;;Zebra ZD420;Warehouse;0;
-HR_Epson_WorkForce;192.168.1.55;;EPSON WF-C5790 Series;;Epson WorkForce Pro;HQ;1;Building HQ, Floor 1
+Name;LocalPort;Brand;DriverName;DriverFolder;Model;Building;Floor;Location;Duplex
+Office_HP_LaserJet;192.168.1.50;;HP Universal Printing PCL 6;;HP LaserJet Pro M404;HQ;2;;
+Finance_Canon_MFP;\\printserver01\Canon_Finance;;;;Canon iR-ADV C3930;HQ;3;;
+Sales_Canon_Floor1;192.168.1.60;Canon;;;Canon imageFORCE 6160;HQ;1;;
+Warehouse_Zebra_Labels;USB001;;ZDesigner ZD420-203dpi ZPL;;Zebra ZD420;Warehouse;0;;Simplex
+HR_Epson_WorkForce;192.168.1.55;;EPSON WF-C5790 Series;;Epson WorkForce Pro;HQ;1;Building HQ, Floor 1;
 "@
 
     try {

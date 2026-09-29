@@ -26,6 +26,9 @@ if (-not (Get-Command -Name Get-Printer -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command -Name Remove-Printer -ErrorAction SilentlyContinue)) {
     function global:Remove-Printer { [CmdletBinding()] param([Parameter(Position=0)]$Name, $ErrorAction) }
 }
+if (-not (Get-Command -Name Set-PrintConfiguration -ErrorAction SilentlyContinue)) {
+    function global:Set-PrintConfiguration { [CmdletBinding()] param($PrinterName, $DuplexingMode, $ErrorAction) }
+}
 if (-not (Get-Command -Name Get-PrinterPort -ErrorAction SilentlyContinue)) {
     function global:Get-PrinterPort { [CmdletBinding()] param([Parameter(Position=0)]$Name, $ErrorAction) }
 }
@@ -259,6 +262,60 @@ Describe "13. Location Wiring (Set-PrinterLocationFromCsv)" {
         Set-PrinterLocationFromCsv -Printer $printer -DryRun
 
         Should -Invoke Set-Printer -Times 0 -Exactly
+    }
+}
+
+Describe "14a. Duplex Wiring (Set-PrinterDuplexFromCsv)" {
+    It "Defaults to TwoSidedLongEdge when the Duplex column is blank" {
+        Mock Set-PrintConfiguration { return } -Verifiable -ParameterFilter { $PrinterName -eq "P1" -and $DuplexingMode -eq "TwoSidedLongEdge" }
+
+        $printer = [PSCustomObject]@{ Name = "P1"; Duplex = "" }
+        Set-PrinterDuplexFromCsv -Printer $printer
+
+        Should -InvokeVerifiable
+    }
+
+    It "Honors an explicit Simplex override (e.g. label printers)" {
+        Mock Set-PrintConfiguration { return } -Verifiable -ParameterFilter { $PrinterName -eq "P2" -and $DuplexingMode -eq "OneSided" }
+
+        $printer = [PSCustomObject]@{ Name = "P2"; Duplex = "Simplex" }
+        Set-PrinterDuplexFromCsv -Printer $printer
+
+        Should -InvokeVerifiable
+    }
+
+    It "Honors an explicit ShortEdge override, case/whitespace-tolerant" {
+        Mock Set-PrintConfiguration { return } -Verifiable -ParameterFilter { $PrinterName -eq "P3" -and $DuplexingMode -eq "TwoSidedShortEdge" }
+
+        $printer = [PSCustomObject]@{ Name = "P3"; Duplex = "  ShortEdge  " }
+        Set-PrinterDuplexFromCsv -Printer $printer
+
+        Should -InvokeVerifiable
+    }
+
+    It "Warns and does not call Set-PrintConfiguration for an unrecognized Duplex value" {
+        Mock Set-PrintConfiguration { return }
+
+        $printer = [PSCustomObject]@{ Name = "P4"; Duplex = "garbage-value" }
+        Set-PrinterDuplexFromCsv -Printer $printer
+
+        Should -Invoke Set-PrintConfiguration -Times 0 -Exactly
+    }
+
+    It "-DryRun does not call Set-PrintConfiguration" {
+        Mock Set-PrintConfiguration { return }
+
+        $printer = [PSCustomObject]@{ Name = "P5"; Duplex = "" }
+        Set-PrinterDuplexFromCsv -Printer $printer -DryRun
+
+        Should -Invoke Set-PrintConfiguration -Times 0 -Exactly
+    }
+
+    It "Warns (does not throw) when the device doesn't support the requested duplex mode" {
+        Mock Set-PrintConfiguration { throw "device does not support duplex" }
+
+        $printer = [PSCustomObject]@{ Name = "P6"; Duplex = "" }
+        { Set-PrinterDuplexFromCsv -Printer $printer } | Should -Not -Throw
     }
 }
 
