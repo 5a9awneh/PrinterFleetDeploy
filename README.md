@@ -112,7 +112,11 @@ cd PrinterFleetDeploy
 - All of the above are covered by `.gitignore` — real inventory and driver binaries never touch git history.
 
 ### 3. Launch with Administrator Privileges
-Open PowerShell as **Administrator** and run:
+Double-click **`RUN.cmd`** — it requests elevation via UAC and launches the script for you, no
+manual "Run as Administrator" needed. This is the recommended way to hand the whole project
+folder to a technician or run it on an end-user's machine.
+
+Or, if you're at an already-elevated PowerShell prompt:
 ```powershell
 .\PrinterManagement.ps1
 ```
