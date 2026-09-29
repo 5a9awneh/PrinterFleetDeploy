@@ -19,19 +19,27 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 
 ## 📑 Table of Contents
 
-- [🌟 Features](#-features)
-- [🖥️ Interactive Console](#️-interactive-console)
-- [📋 Requirements](#-requirements)
-- [🚀 Quick Start](#-quick-start)
-- [📊 CSV File Specifications](#-csv-file-specifications)
-- [🔌 Driver Auto-Staging (`driver-map.csv`)](#-driver-auto-staging-driver-mapcsv)
-- [📍 Location Wiring](#-location-wiring)
-- [� Duplex Printing](#-duplex-printing)
-- [🧪 Automated Unit Tests](#-automated-unit-tests)
-- [🛡️ Safety & Parachute Guards](#️-safety--parachute-guards)
-- [🤝 Contributing](#-contributing)
-- [🙏 Credits & Attribution](#-credits--attribution)
-- [📄 License](#-license)
+- [Printer Management Suite 🖨️](#printer-management-suite-️)
+  - [📑 Table of Contents](#-table-of-contents)
+  - [🌟 Features](#-features)
+  - [🖥️ Interactive Console](#️-interactive-console)
+  - [📋 Requirements](#-requirements)
+  - [🚀 Quick Start](#-quick-start)
+    - [1. Clone the Repository](#1-clone-the-repository)
+    - [2. Bring Your Own Data (never committed to git)](#2-bring-your-own-data-never-committed-to-git)
+    - [3. Launch with Administrator Privileges](#3-launch-with-administrator-privileges)
+  - [📊 CSV File Specifications](#-csv-file-specifications)
+    - [Sample `printers.csv` (see `config/printers.sample.csv`):](#sample-printerscsv-see-configprinterssamplecsv)
+  - [🔌 Driver Auto-Staging (`driver-map.csv`)](#-driver-auto-staging-driver-mapcsv)
+  - [📍 Location Wiring](#-location-wiring)
+  - [🔄 Duplex Printing](#-duplex-printing)
+  - [🧪 Automated Unit Tests](#-automated-unit-tests)
+    - [Running Tests Locally:](#running-tests-locally)
+    - [Continuous Integration (CI):](#continuous-integration-ci)
+  - [🛡️ Safety \& Parachute Guards](#️-safety--parachute-guards)
+  - [🤝 Contributing](#-contributing)
+  - [🙏 Credits \& Attribution](#-credits--attribution)
+  - [📄 License](#-license)
 
 ---
 
@@ -51,7 +59,7 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 - 📍 **Location Wiring:** Sets the Windows printer `Location` property from a `Location` column, or composes it from `Building`/`Floor` — and the `Remove-Printers` picker sorts by `Location` so a large fleet is easy to navigate visually.
 - 🔄 **Reconcile-to-Desired-State:** Before adding a printer, removes any existing printer matching that row's `Name` **or** port (wrong driver already selected, stale entry under a different name, duplicates — all handled the same way) so the fresh install always succeeds, then re-adds it clean from the CSV.
 - 💾 **Automatic Pre-Change Backup:** `Add-Printers` snapshots the current `Get-Printer`/`Get-PrinterPort`/`Get-PrinterDriver` state to a timestamped JSON file before making any changes, as a rollback reference.
-- � **Default Duplex Printing:** Sets each printer's default print preference to two-sided (`TwoSidedLongEdge`) via `Set-PrintConfiguration` — driver-agnostic, works the same across brands — with a per-row `Duplex` column override (`ShortEdge`/`Simplex`) for exceptions like label printers.
+- 🔄 **Default Duplex Printing:** Sets each printer's default print preference to two-sided (`TwoSidedLongEdge`) via `Set-PrintConfiguration` — driver-agnostic, works the same across brands — with a per-row `Duplex` column override (`ShortEdge`/`Simplex`) for exceptions like label printers.
 - 🧪 **`-DryRun` Previews:** `Add-Printers -DryRun` previews every driver-staging, port-creation, printer-add, and Location-set action without changing anything on the system.
 
 ---
@@ -200,7 +208,7 @@ set on any printer).
 
 ---
 
-## � Duplex Printing
+## 🔄 Duplex Printing
 
 Every printer defaults to two-sided printing (`TwoSidedLongEdge`) via `Set-PrintConfiguration` —
 this is a Print Spooler/Print Ticket setting, not something driver-specific, so it works
