@@ -1,4 +1,4 @@
-# Printer Management Suite 🖨️
+# PrinterFleetDeploy
 
 [![PowerShell Tests & Quality Check](https://github.com/IamCarron/PrinterManagement/actions/workflows/test.yml/badge.svg)](https://github.com/IamCarron/PrinterManagement/actions/workflows/test.yml)
 [![PowerShell](https://img.shields.io/badge/Language-PowerShell-5391FE.svg?logo=powershell&logoColor=white)](https://microsoft.com/powershell)
@@ -9,7 +9,7 @@
 
 Automated, robust, and enterprise-grade PowerShell automation suite for managing printers in Windows environments. Designed for System Administrators, IT Support, and DevOps to streamline bulk deployments, maintenance, diagnostics, and inventorying.
 
-> **PrinterFleetDeploy** is a fork of [IamCarron/PrinterManagement](https://github.com/IamCarron/PrinterManagement)
+> **PrinterFleetDeploy**, by [Faris Khasawneh](https://github.com/5a9awneh), is a fork of [IamCarron/PrinterManagement](https://github.com/IamCarron/PrinterManagement)
 > that adds transparent **driver auto-staging** (`pnputil /add-driver`) and **Location**
 > (Building/Floor) wiring on top of the original bulk-deployment tool. It is brand/model/driver
 > **agnostic** — bring your own inventory CSV, your own driver packages, and your own
@@ -19,7 +19,7 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 
 ## 📑 Table of Contents
 
-- [Printer Management Suite 🖨️](#printer-management-suite-️)
+- [PrinterFleetDeploy](#printerfleetdeploy)
   - [📑 Table of Contents](#-table-of-contents)
   - [🌟 Features](#-features)
   - [🖥️ Interactive Console](#️-interactive-console)

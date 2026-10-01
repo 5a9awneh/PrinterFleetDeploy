@@ -422,16 +422,20 @@ function Show-Banner {
     Clear-Host
     Write-Host ""
     Write-Host "  ===========================================================================" -ForegroundColor DarkCyan
-    Write-Host "    ___      _      __          __  ___                                      " -ForegroundColor Cyan
-    Write-Host "   / _ \____(_)__  / /____ ____/  |/  /__ ____  ___ ____ ____ __ _  ___ ___  " -ForegroundColor Cyan
-    Write-Host "  / ___/ __/ / _ \/ __/ -_) __/ /|_/ / _ ``/ _ \/ _ ``/ _ ``/ -_)  ' \/ -_) _ \ " -ForegroundColor Cyan
-    Write-Host " /_/  /_/ /_/_//_/\__/\__/_/ /_/  /_/\_,_/_//_/\_,_/\_, /\__/_/_/_/\__/_//_/ " -ForegroundColor Cyan
-    Write-Host "                                                    /___/                    " -ForegroundColor Cyan
+    Write-Host '   ___  ___  ___  _  _  _____  ___  ___    ___  _     ___  ___  _____ ' -ForegroundColor Cyan
+    Write-Host '  | _ \| _ \|_ _|| \| ||_   _|| __|| _ \  | __|| |   | __|| __||_   _|' -ForegroundColor Cyan
+    Write-Host '  |  _/|   / | | | .` |  | |  | _| |   /  | _| | |__ | _| | _|   | |  ' -ForegroundColor Cyan
+    Write-Host '  |_|  |_|_\|___||_|\_|  |_|  |___||_|_\  |_|  |____||___||___|  |_|  ' -ForegroundColor Cyan
+    Write-Host '   ___   ___  ___  _      ___  __   __' -ForegroundColor Cyan
+    Write-Host '  |   \ | __|| _ \| |    / _ \ \ \ / /' -ForegroundColor Cyan
+    Write-Host '  | |) || _| |  _/| |__ | (_) | \ V / ' -ForegroundColor Cyan
+    Write-Host '  |___/ |___||_|  |____| \___/   |_|  ' -ForegroundColor Cyan
     Write-Host "  ===========================================================================" -ForegroundColor DarkCyan
-    Write-Host "   v3.2.0" -ForegroundColor DarkGray -NoNewline
+    Write-Host "   v1.0.0" -ForegroundColor DarkGray -NoNewline
     Write-Host " | " -ForegroundColor DarkCyan -NoNewline
     Write-Host $script:T.BannerSubtitle -ForegroundColor White
-    Write-Host "   github.com/IamCarron/PrinterManagement" -ForegroundColor DarkGray
+    Write-Host "   by Faris Khasawneh (github.com/5a9awneh)" -ForegroundColor Gray
+    Write-Host "   Based on IamCarron/PrinterManagement v3.2.0 (Apache-2.0)" -ForegroundColor DarkGray
     Write-Host "  ===========================================================================" -ForegroundColor DarkCyan
     Write-Host ""
 }
@@ -1556,7 +1560,7 @@ function Start-PrinterManagement {
         Write-Host $($script:T.MadeWith) -ForegroundColor DarkGray -NoNewline
         Write-Host "<3" -ForegroundColor Red -NoNewline
         Write-Host $($script:T.By) -ForegroundColor DarkGray -NoNewline
-        Write-Host "IamCarron" -ForegroundColor Magenta
+        Write-Host "Faris Khasawneh" -ForegroundColor Magenta
         Write-Host ""
 
         $option = Read-Host $($script:T.SelectOption)
