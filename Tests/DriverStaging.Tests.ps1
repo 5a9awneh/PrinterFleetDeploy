@@ -534,6 +534,51 @@ Describe "15a. Printer picker (Select-PrintersFromList)" {
     }
 }
 
+Describe "15d. USB ports" {
+    BeforeEach {
+        Mock Backup-PrinterState { }
+        Mock Get-Printer { @() }
+        Mock Get-PrinterDriver { [PSCustomObject]@{ Name = "D1" } }
+        Mock Add-PrinterPort { }
+        Mock Add-Printer { }
+        Mock Remove-Printer { }
+        Mock Set-PrintConfiguration { }
+        $script:usbCsv = Join-Path -Path $script:TestTempDir -ChildPath "usb.csv"
+        "Name;LocalPort;DriverName`nLabel;USB001;D1" | Set-Content -Path $script:usbCsv -Encoding UTF8
+    }
+
+    It "Skips a row whose USB port doesn't exist instead of creating a fake port" {
+        Mock Get-PrinterPort { $null }
+
+        $r = Add-Printers -FilePath $script:usbCsv
+
+        $r.Failed | Should -Be 1
+        Should -Invoke Add-PrinterPort -Times 0 -Exactly
+        Should -Invoke Add-Printer -Times 0 -Exactly
+    }
+
+    It "Installs on an existing USB port without creating one" {
+        Mock Get-PrinterPort { [PSCustomObject]@{ Name = "USB001" } }
+
+        $r = Add-Printers -FilePath $script:usbCsv
+
+        $r.Success | Should -Be 1
+        Should -Invoke Add-PrinterPort -Times 0 -Exactly
+        Should -Invoke Add-Printer -Times 1 -Exactly -ParameterFilter { $PortName -eq "USB001" }
+    }
+
+    It "Remove-Printers leaves the Windows-owned USB port alone" {
+        Mock Get-PrinterPort { [PSCustomObject]@{ Name = "USB001" } }
+        Mock Get-Printer { [PSCustomObject]@{ Name = "Label" } }
+        Mock Remove-PrinterPort { }
+
+        Remove-Printers -PrinterList @([PSCustomObject]@{ Name = "Label"; LocalPort = "USB001" }) -Force | Out-Null
+
+        Should -Invoke Remove-Printer -Times 1 -Exactly
+        Should -Invoke Remove-PrinterPort -Times 0 -Exactly
+    }
+}
+
 Describe "15c. Audit regressions" {
     It "Add-Printers keeps an existing printer when its replacement's driver can't be installed" {
         $csv = Join-Path -Path $script:TestTempDir -ChildPath "keep_existing.csv"

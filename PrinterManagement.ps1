@@ -1088,6 +1088,13 @@ function Add-Printers {
         # Create Port if needed
         $portExists = Get-PrinterPort -Name $pPort -ErrorAction SilentlyContinue
         if (-not $portExists) {
+            # Windows creates USB### ports itself when the device is connected; a locally created
+            # lookalike would install a printer that prints nowhere, so skip instead.
+            if ($pPort -match '^USB\d+$') {
+                Write-Log ("USB port '{0}' not found -- plug the printer in first (Windows creates USB ports itself); skipping '{1}'." -f $pPort, $pName) "ERROR"
+                $failCount++
+                continue
+            }
             if ($DryRun) {
                 Write-Log ("[DryRun] Would create port '{0}'" -f $pPort) "INFO"
             } else {
@@ -1258,8 +1265,8 @@ function Remove-Printers {
             Write-Log ($script:T.RemRemMiss -f $pName) "WARN"
         }
 
-        # Remove Port if provided and port exists
-        if (-not [string]::IsNullOrWhiteSpace($pPort)) {
+        # Remove Port if provided and port exists (USB### ports are owned by Windows -- left alone)
+        if (-not [string]::IsNullOrWhiteSpace($pPort) -and $pPort -notmatch '^USB\d+$') {
             $portExists = Get-PrinterPort -Name $pPort -ErrorAction SilentlyContinue
             if ($portExists) {
                 # The spooler can hold a port for a few seconds after Remove-Printer (seen with

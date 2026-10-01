@@ -146,7 +146,7 @@ aliases (`Printer Name`/`PrinterName`/`Name`, `IP Address`/`Port`/`LocalPort`). 
 | Column | Required? | Purpose |
 | :--- | :--- | :--- |
 | **`Name`** | Yes | Display name for the printer in Windows. |
-| **`LocalPort`** | Yes | Port identifier (IPv4 address, hostname, UNC path, or USB/local port). |
+| **`LocalPort`** | Yes | Port identifier (IPv4 address, hostname, UNC path, or a `USB###` port). USB ports are created by Windows when the printer is plugged in, so the script never creates them: connect the printer first, and note the number (`USB001`, `USB002`...) can differ per machine. |
 | **`Brand`** | No\* | Matched to `Drivers/<Brand>/` by convention (or an override row in `config/driver-map.csv`) to resolve the driver. |
 | **`DriverName`** | No\* | Exact registered driver name (`Get-PrinterDriver`). Overrides the `Brand` lookup if present. |
 | **`DriverFolder`** | No\* | Path under `Drivers/` to stage from if the driver isn't installed yet. Overrides the `Brand` lookup if present. |
