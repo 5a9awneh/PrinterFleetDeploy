@@ -69,18 +69,22 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 
 ```text
   ===========================================================================
-    ___      _      __          __  ___
-   / _ \____(_)__  / /____ ____/  |/  /__ ____  ___ ____ ____ __ _  ___ ___
-  / ___/ __/ / _ \/ __/ -_) __/ /|_/ / _ `/ _ \/ _ `/ _ `/ -_)  ' \/ -_) _ \
- /_/  /_/ /_/_//_/\__/\__/_/ /_/  /_/\_,_/_//_/\_,_/\_, /\__/_/_/_/\__/_//_/
-                                                    /___/
+   ___  ___  ___  _  _  _____  ___  ___    ___  _     ___  ___  _____
+  | _ \| _ \|_ _|| \| ||_   _|| __|| _ \  | __|| |   | __|| __||_   _|
+  |  _/|   / | | | .` |  | |  | _| |   /  | _| | |__ | _| | _|   | |
+  |_|  |_|_\|___||_|\_|  |_|  |___||_|_\  |_|  |____||___||___|  |_|
+   ___   ___  ___  _      ___  __   __
+  |   \ | __|| _ \| |    / _ \ \ \ / /
+  | |) || _| |  _/| |__ | (_) | \ V /
+  |___/ |___||_|  |____| \___/   |_|
   ===========================================================================
-   v3.2.0 | Windows Printer Management Suite
-   github.com/IamCarron/PrinterManagement
+   v1.0.0 | Windows Printer Management Suite
+   by Faris Khasawneh (github.com/5a9awneh)
+   Based on IamCarron/PrinterManagement v3.2.0 (Apache-2.0)
   ===========================================================================
 
    >> OPERATIONS -------------------------------------------------
-      [1]  Add Printers         Bulk CSV / TCP-IP / Shared UNC
+      [1]  Add Printers         Pick from CSV / TCP-IP / Shared UNC
       [2]  Remove Printers      CSV or interactive selection
 
    >> DIAGNOSTICS ------------------------------------------------
@@ -94,7 +98,7 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
    ---------------------------------------------------------------
       [0]  Exit
 
-                         Made with <3 by IamCarron
+                         Made with <3 by Faris Khasawneh
 ```
 
 ---
@@ -104,7 +108,7 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 - **Operating System:** Windows 10 / 11 or Windows Server 2016 / 2019 / 2022 / 2025.
 - **PowerShell Version:** Windows PowerShell 5.1 (Built-in) or PowerShell 7.x (Core).
 - **Execution Privileges:** Elevated Administrator rights (`Run as Administrator`).
-- **Print Drivers:** Required manufacturer printer drivers must be installed prior to bulk deployment.
+- **Print Drivers:** Put each vendor's extracted driver package under `Drivers/<Brand>/` and the tool stages it for you (see [Driver Auto-Staging](#-driver-auto-staging)).
 
 ---
 

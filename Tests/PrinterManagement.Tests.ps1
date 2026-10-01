@@ -182,6 +182,10 @@ Describe "4. Template Generator (New-PrinterTemplateCsv)" {
 }
 
 Describe "5. Printer Installation (Add-Printers)" {
+    BeforeEach {
+        # Add-Printers snapshots printer state first; keep the unit tests from writing real files.
+        Mock Backup-PrinterState { }
+    }
     Context "When adding a shared network printer (UNC)" {
         It "Calls Add-Printer with -ConnectionName" {
             $csvPath = Join-Path -Path $script:TestTempDir -ChildPath "unc_printers.csv"

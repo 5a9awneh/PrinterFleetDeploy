@@ -27,7 +27,7 @@ $script:Strings = @{
         'PressEnter'        = "`nPress Enter to return to menu..."
         'CatOperations'     = "OPERATIONS "
         'OptAddPrinters'    = "      [1]  Add Printers"
-        'DescAddPrinters'   = "         Bulk CSV / TCP-IP / Shared UNC"
+        'DescAddPrinters'   = "         Pick from CSV / TCP-IP / Shared UNC"
         'OptRemPrinters'    = "      [2]  Remove Printers"
         'DescRemPrinters'   = "      CSV or interactive selection"
         'CatDiagnostics'    = "DIAGNOSTICS "
@@ -203,7 +203,7 @@ $script:Strings = @{
         'PressEnter'        = "`nPresiona Enter para volver al menu..."
         'CatOperations'     = "OPERACIONES "
         'OptAddPrinters'    = "      [1]  Agregar Impresoras"
-        'DescAddPrinters'   = "         CSV Masivo / TCP-IP / Red UNC"
+        'DescAddPrinters'   = "         Elegir de CSV / TCP-IP / Red UNC"
         'OptRemPrinters'    = "      [2]  Eliminar Impresoras"
         'DescRemPrinters'   = "      CSV o seleccion interactiva"
         'CatDiagnostics'    = "DIAGNOSTICO "
@@ -812,7 +812,7 @@ function Install-StagedDriver {
 # file so a run of Add-Printers has a rollback reference. Read-only, always safe to call.
 function Backup-PrinterState {
     param (
-        [string]$OutputDir = ".\PrinterStateBackups"
+        [string]$OutputDir = (Join-Path -Path $(if ($PSScriptRoot) { $PSScriptRoot } else { "." }) -ChildPath "PrinterStateBackups")
     )
 
     try {

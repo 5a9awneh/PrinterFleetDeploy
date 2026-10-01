@@ -1,20 +1,15 @@
-# Brand -> driver lookup for PrinterFleetDeploy.
+# OPTIONAL exceptions file for PrinterFleetDeploy. You normally do NOT need it.
 #
-# Purpose: instead of repeating a driver name/folder on every single printer row in your
-# printers.csv, tag each printer with a "Brand" and let this file resolve the actual driver.
-# Real-world driver consolidation tends to land on ONE driver per brand (confirmed for our own
-# local example fleet below), so this avoids needless per-row duplication.
+# By convention the script finds Drivers/<Brand>/<Package>/ from the Brand column of your
+# printers.csv and reads the driver name from the package's .inf. Add a row here only when
+# convention can't decide: a brand alias, a brand folder holding several packages, or a package
+# declaring many model names. A row here beats convention; a DriverName/DriverFolder on a
+# printers.csv row beats both.
 #
-# DriverName is OPTIONAL: leave it blank and the script reads the name from the driver's .inf
-# (no install needed) when the package declares a single name. Set it explicitly only for
-# packages listing many models, or to override. It must match the name inside the .inf.
-#
-# Matching is case/whitespace-tolerant, but the Brand value must still correspond to whatever
-# your own printers.csv actually puts in its Brand column.
-#
+# DriverName may be left blank (read from the .inf when the package declares a single name).
 # DriverFolder is a path relative to Drivers/ (the TOP-LEVEL extracted package folder, not the
-# exact .inf path -- see Drivers/README.md for why).
+# exact .inf path -- see Drivers/README.md). Matching on Brand is case/whitespace-tolerant.
+#
+# Example: a brand folder that holds two packages, so you pick one explicitly.
 Brand,DriverName,DriverFolder
-Canon,VERIFY-WITH-Get-PrinterDriver,Canon/GPlus_PCL6_Driver_V340_W64_00
-Develop/KM,VERIFY-WITH-Get-PrinterDriver,Konica-Develop/GEUPDPCL6Win_3912030MU
-Sharp,VERIFY-WITH-Get-PrinterDriver,Sharp/UD3_07_PCL6_2510a
+Acme,,Acme/UniversalPCL6_v2
