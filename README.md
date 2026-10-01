@@ -179,9 +179,9 @@ Develop/KM,KONICA MINOLTA Universal PCL,Konica-Develop/GEUPDPCL6Win_3912030MU
 Sharp,SHARP UD3 PCL6,Sharp/UD3_07_PCL6_2510a
 ```
 
-- **`DriverName`** must be the *actual* name `Get-PrinterDriver` reports after staging on a real
-  test machine — not the vendor's marketing/filename — since this is genuinely
-  environment-specific.
+- **`DriverName`** is optional. Leave it blank and the script reads the driver's name straight from
+  the package's `.inf` (no install needed) when it declares a single name. Set it explicitly only
+  for packages that list many models, or to override. It must match the name in the `.inf`.
 - **`DriverFolder`** is a path relative to `Drivers/` (the top-level extracted package folder, not
   the exact `.inf` path) — see [`Drivers/README.md`](Drivers/README.md) for layout and sourcing.
 - Matching on `Brand` is case/whitespace-tolerant, and a row's own `DriverName`/`DriverFolder`

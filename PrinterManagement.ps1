@@ -631,6 +631,49 @@ function Import-DriverMap {
     }
 }
 
+# Reads the driver model display names declared in a package's .inf files (no install needed),
+# so DriverName in driver-map.csv can be left blank for single-name "universal" packages.
+function Get-InfDriverNames {
+    param ([string]$DriverFolder)
+
+    if ([string]::IsNullOrWhiteSpace($DriverFolder)) { return @() }
+    $baseDir   = if ($PSScriptRoot) { $PSScriptRoot } else { "." }
+    $stagePath = Join-Path -Path (Join-Path -Path $baseDir -ChildPath "Drivers") -ChildPath $DriverFolder
+    if (-not (Test-Path -Path $stagePath -PathType Container)) { return @() }
+
+    $names = @()
+    foreach ($inf in Get-ChildItem -Path $stagePath -Filter "*.inf" -Recurse -File) {
+        $sections = @{}
+        $current  = ""
+        foreach ($line in (Get-Content -Path $inf.FullName)) {
+            $t = $line.Trim()
+            if ($t -match '^\[(.+)\]$') { $current = $Matches[1]; if (-not $sections.ContainsKey($current)) { $sections[$current] = @() }; continue }
+            if ($current -and $t -and -not $t.StartsWith(';')) { $sections[$current] += $t }
+        }
+
+        $strings = @{}
+        foreach ($s in ($sections.Keys | Where-Object { $_ -like 'Strings*' })) {
+            foreach ($t in $sections[$s]) { if ($t -match '^(\S+?)\s*=\s*"?(.*?)"?$') { $strings[$Matches[1]] = $Matches[2] } }
+        }
+
+        foreach ($m in @($sections['Manufacturer'])) {
+            $parts = ($m -split '=', 2)[1] -split ','
+            $base = $parts[0].Trim()
+            $modelSections = @($base) + @($parts | Select-Object -Skip 1 | ForEach-Object { "$base.$($_.Trim())" })
+            foreach ($ms in $modelSections) {
+                foreach ($t in @($sections[$ms])) {
+                    if ($t -match '^("[^"]+"|%[^%]+%)\s*=') {
+                        $name = $Matches[1].Trim('"')
+                        if ($name -match '^%(.+)%$') { $name = $strings[$Matches[1]] }
+                        if ($name -and $name -notmatch '^\{[0-9A-Fa-f-]+\}$') { $names += $name }
+                    }
+                }
+            }
+        }
+    }
+    return @($names | Sort-Object -Unique)
+}
+
 # Resolves {DriverName, DriverFolder} for a normalized printer row. Row-level DriverName/
 # DriverFolder values always win; otherwise falls back to a case/whitespace-tolerant Brand
 # lookup in config/driver-map.csv. Returns $null (and warns) if neither resolves.
@@ -652,6 +695,16 @@ function Resolve-PrinterDriver {
             $entry = $script:DriverMapCache[$key]
             if ([string]::IsNullOrWhiteSpace($driverName))   { $driverName   = $entry.DriverName }
             if ([string]::IsNullOrWhiteSpace($driverFolder)) { $driverFolder = $entry.DriverFolder }
+        }
+    }
+
+    # DriverName blank but a folder is known: read it from the .inf when it declares exactly one.
+    if ([string]::IsNullOrWhiteSpace($driverName) -and -not [string]::IsNullOrWhiteSpace($driverFolder)) {
+        $found = @(Get-InfDriverNames -DriverFolder $driverFolder | Sort-Object Length)
+        # Also accept "base name + versioned variants" (e.g. 'X' and 'X v3.9.12') as one driver.
+        if ($found.Count -ge 1 -and @($found | Where-Object { -not $_.StartsWith($found[0]) }).Count -eq 0) { $driverName = $found[0] }
+        elseif ($found.Count -gt 1) {
+            Write-Log ("'{0}' declares {1} driver names -- set DriverName explicitly in driver-map.csv." -f $driverFolder, $found.Count) "WARN"
         }
     }
 

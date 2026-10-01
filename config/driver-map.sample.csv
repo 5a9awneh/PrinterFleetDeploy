@@ -5,11 +5,9 @@
 # Real-world driver consolidation tends to land on ONE driver per brand (confirmed for our own
 # local example fleet below), so this avoids needless per-row duplication.
 #
-# IMPORTANT: DriverName below must be the ACTUAL name Get-PrinterDriver reports after you stage
-# the driver on a real test machine -- not the vendor's marketing/filename. Run:
-#   Get-PrinterDriver | Select-Object Name
-# after staging, and copy the exact string it reports into this file. This is genuinely
-# environment/OS-version specific and cannot be hard-coded generically -- verify it yourself.
+# DriverName is OPTIONAL: leave it blank and the script reads the name from the driver's .inf
+# (no install needed) when the package declares a single name. Set it explicitly only for
+# packages listing many models, or to override. It must match the name inside the .inf.
 #
 # Matching is case/whitespace-tolerant, but the Brand value must still correspond to whatever
 # your own printers.csv actually puts in its Brand column.

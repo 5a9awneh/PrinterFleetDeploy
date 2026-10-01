@@ -133,6 +133,52 @@ Develop/KM,KONICA MINOLTA Universal PCL,Konica-Develop/GEUPDPCL6Win_3912030MU
     }
 }
 
+Describe "10a. INF Name Detection (Get-InfDriverNames)" {
+    BeforeAll {
+        # Get-InfDriverNames resolves under $PSScriptRoot\Drivers of PrinterManagement.ps1, so the
+        # fixture lives in a uniquely-named subfolder there and is removed afterwards.
+        $script:InfFixtureRel = "PfdInfTest_$([System.Guid]::NewGuid().ToString('N'))"
+        $script:InfFixtureDir = Join-Path -Path (Join-Path -Path (Split-Path -Parent $script:ScriptPath) -ChildPath "Drivers") -ChildPath $script:InfFixtureRel
+        New-Item -ItemType Directory -Path $script:InfFixtureDir -Force | Out-Null
+        @'
+[Manufacturer]
+%Acme% = Acme,NTamd64
+
+[Acme.NTamd64]
+%Model1% = DRV,LPTENUM\AcmeUniversal
+"Acme Direct Name" = DRV,USBPRINT\Acme
+%Guid% = DRV,ROOT\Acme
+
+[Other]
+%NotAModel% = x,y
+
+[Strings]
+Model1 = "Acme Universal PCL6"
+Guid = "{0155544A-1772-4668-BD55-240A62521160}"
+NotAModel = "Should Not Appear"
+'@ | Set-Content -Path (Join-Path $script:InfFixtureDir "acme.inf") -Encoding ASCII
+    }
+    AfterAll {
+        Remove-Item -Path $script:InfFixtureDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    It "Returns model names from Manufacturer-referenced sections, resolving %token% strings" {
+        $names = Get-InfDriverNames -DriverFolder $script:InfFixtureRel
+        $names | Should -Contain "Acme Universal PCL6"
+        $names | Should -Contain "Acme Direct Name"
+    }
+
+    It "Ignores GUID pseudo-names and entries outside model sections" {
+        $names = Get-InfDriverNames -DriverFolder $script:InfFixtureRel
+        $names | Should -Not -Contain "{0155544A-1772-4668-BD55-240A62521160}"
+        $names | Should -Not -Contain "Should Not Appear"
+    }
+
+    It "Returns an empty list for a missing folder" {
+        @(Get-InfDriverNames -DriverFolder "DoesNotExist_$([System.Guid]::NewGuid().ToString('N'))").Count | Should -Be 0
+    }
+}
+
 Describe "11. Driver Presence Check (Test-DriverInstalled)" {
     It "Returns `$true when Get-PrinterDriver finds a match" {
         Mock Get-PrinterDriver { return [PSCustomObject]@{ Name = "Canon Generic Plus PCL6" } }
