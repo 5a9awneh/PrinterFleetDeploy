@@ -944,10 +944,18 @@ function Set-PrinterDuplexFromCsv {
     }
 }
 
-# Lets the technician pick which CSV rows to install (Ctrl/Shift multi-select), instead of
-# installing the whole fleet file onto one machine. Returns the chosen rows; none = cancelled.
-function Select-PrintersToAdd {
-    param ([Parameter(Mandatory = $true)] [array]$PrinterList)
+# Single source for the auto-detected inventory path, so every CSV-driven action behaves alike.
+function Get-DefaultPrintersCsv {
+    return (Join-Path -Path $(if ($PSScriptRoot) { $PSScriptRoot } else { "." }) -ChildPath "config\printers.csv")
+}
+
+# Lets the technician pick which CSV rows to act on (Ctrl/Shift multi-select), instead of
+# applying the whole fleet file to one machine. Returns the chosen rows; none = cancelled.
+function Select-PrintersFromList {
+    param (
+        [Parameter(Mandatory = $true)] [array]$PrinterList,
+        [string]$Title = "Select printers (Ctrl/Shift for multiple), then OK"
+    )
 
     if (-not (Get-Command -Name Out-GridView -ErrorAction SilentlyContinue)) {
         Write-Log "Out-GridView is unavailable on this host -- cannot show the printer picker." "ERROR"
@@ -956,7 +964,7 @@ function Select-PrintersToAdd {
 
     $view = $PrinterList | Select-Object Name, @{ n = 'IP'; e = { $_.LocalPort } }, Brand, Model, Building, Floor |
         Sort-Object Building, Floor, Name
-    $selected = @($view | Out-GridView -Title "Select printers to install (Ctrl/Shift for multiple), then OK" -PassThru)
+    $selected = @($view | Out-GridView -Title $Title -PassThru)
 
     return @($PrinterList | Where-Object {
         $row = $_
@@ -978,8 +986,7 @@ function Add-Printers {
 
     Write-Host $script:T.HeaderAdd -ForegroundColor Yellow
 
-    $defaultPrintersCsv = Join-Path -Path $(if ($PSScriptRoot) { $PSScriptRoot } else { "." }) -ChildPath "config\printers.csv"
-    $printersFile = Get-ValidFilePath -FilePath $FilePath -Title $script:T.AddTitleCSV -DefaultPath $defaultPrintersCsv
+    $printersFile = Get-ValidFilePath -FilePath $FilePath -Title $script:T.AddTitleCSV -DefaultPath (Get-DefaultPrintersCsv)
     if (-not $printersFile) {
         if (-not $FilePath) { Read-Host -Prompt $script:T.PressEnter }
         return @{ Total = 0; Success = 0; Failed = 0 }
@@ -994,7 +1001,7 @@ function Add-Printers {
 
     $interactive = [string]::IsNullOrWhiteSpace($FilePath)
     if ($Select -or $interactive) {
-        $printerList = @(Select-PrintersToAdd -PrinterList $printerList)
+        $printerList = @(Select-PrintersFromList -PrinterList $printerList -Title "Select printers to INSTALL (Ctrl/Shift for multiple), then OK")
         if ($printerList.Count -eq 0) {
             Write-Log "No printers selected -- nothing to install." "WARN"
             if ($interactive) { Read-Host -Prompt $script:T.PressEnter }
@@ -1165,7 +1172,7 @@ function Remove-Printers {
         $subOption = Read-Host $script:T.RemSubOpt
 
         if ($subOption -eq "1") {
-            $printersFile = Get-ValidFilePath -Title $script:T.RemTitleCSV
+            $printersFile = Get-ValidFilePath -Title $script:T.RemTitleCSV -DefaultPath (Get-DefaultPrintersCsv)
             if (-not $printersFile) { return @{ Total = 0; Success = 0; Failed = 0 } }
             $printersToRemove = @(Import-SmartCsv -Path $printersFile)
         } elseif ($subOption -eq "2") {
@@ -1272,23 +1279,36 @@ function Remove-Printers {
 function Send-TestPages {
     param (
         [string]$FilePath = "",
-        [array]$PrinterList = @()
+        [array]$PrinterList = @(),
+        # Same behaviour as Add-Printers: picker implied for interactive use, opt-in with -Select.
+        [switch]$Select
     )
 
     Write-Host $script:T.HeaderTest -ForegroundColor Yellow
 
     $printersToTest = @()
+    $interactive = $false
     if ($PrinterList -and $PrinterList.Count -gt 0) {
         $printersToTest = $PrinterList
     } elseif (-not [string]::IsNullOrWhiteSpace($FilePath)) {
         $printersToTest = @(Import-SmartCsv -Path $FilePath)
     } else {
-        $printersFile = Get-ValidFilePath -Title "Select CSV File for Test Pages"
+        $interactive = $true
+        $printersFile = Get-ValidFilePath -Title "Select CSV File for Test Pages" -DefaultPath (Get-DefaultPrintersCsv)
         if (-not $printersFile) {
             Read-Host -Prompt $script:T.PressEnter
             return @{ Total = 0; Success = 0; Failed = 0 }
         }
         $printersToTest = @(Import-SmartCsv -Path $printersFile)
+    }
+
+    if (($Select -or $interactive) -and $printersToTest.Count -gt 0) {
+        $printersToTest = @(Select-PrintersFromList -PrinterList $printersToTest -Title "Select printers to send a TEST PAGE to (Ctrl/Shift for multiple), then OK")
+        if ($printersToTest.Count -eq 0) {
+            Write-Log "No printers selected -- nothing to test." "WARN"
+            if ($interactive) { Read-Host -Prompt $script:T.PressEnter }
+            return @{ Total = 0; Success = 0; Failed = 0 }
+        }
     }
 
     if (-not $printersToTest -or $printersToTest.Count -eq 0) {

@@ -431,7 +431,7 @@ Describe "14. Printer State Backup (Backup-PrinterState)" {
     }
 }
 
-Describe "15a. Add-time picker (Select-PrintersToAdd)" {
+Describe "15a. Printer picker (Select-PrintersFromList)" {
     BeforeAll {
         $script:Rows = @(
             [PSCustomObject]@{ Name = "A"; LocalPort = "10.0.0.1"; Brand = "Canon"; Model = "m"; Building = "B"; Floor = "1" }
@@ -442,14 +442,28 @@ Describe "15a. Add-time picker (Select-PrintersToAdd)" {
 
     It "Returns only the rows the user picked, as the original objects" {
         Mock Out-GridView { $InputObject | Where-Object { $_.Name -in @("B", "C") } }
-        $r = @(Select-PrintersToAdd -PrinterList $script:Rows)
+        $r = @(Select-PrintersFromList -PrinterList $script:Rows)
         $r.Name | Should -Be @("B", "C")
         $r[0].LocalPort | Should -Be "10.0.0.2"
     }
 
     It "Returns nothing when the user cancels" {
         Mock Out-GridView { }
-        @(Select-PrintersToAdd -PrinterList $script:Rows).Count | Should -Be 0
+        @(Select-PrintersFromList -PrinterList $script:Rows).Count | Should -Be 0
+    }
+
+    It "Send-TestPages -Select tests only the picked printers" {
+        $csv = Join-Path -Path $script:TestTempDir -ChildPath "pick_test.csv"
+        "Name;LocalPort;DriverName`nA;10.0.0.1;D1`nB;10.0.0.2;D1" | Set-Content -Path $csv -Encoding UTF8
+        Mock Get-Printer { [PSCustomObject]@{ Name = $Name } }
+        Mock Get-CimInstance { [PSCustomObject]@{ Name = "x" } }
+        Mock Invoke-CimMethod { [PSCustomObject]@{ ReturnValue = 0 } } -RemoveParameterType InputObject
+        Mock Out-GridView { $InputObject | Where-Object { $_.Name -eq "A" } }
+
+        $r = Send-TestPages -FilePath $csv -Select
+
+        $r.Total | Should -Be 1
+        Should -Invoke Invoke-CimMethod -Times 1 -Exactly
     }
 
     It "Add-Printers -Select installs only the picked rows and nothing when cancelled" {
