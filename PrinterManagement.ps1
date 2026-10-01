@@ -1257,11 +1257,17 @@ function Remove-Printers {
         if (-not [string]::IsNullOrWhiteSpace($pPort)) {
             $portExists = Get-PrinterPort -Name $pPort -ErrorAction SilentlyContinue
             if ($portExists) {
-                try {
-                    Remove-PrinterPort -Name $pPort -ErrorAction Stop
-                    Write-Log ($script:T.RemPortSucc -f $pPort) "SUCCESS"
-                } catch {
-                    Write-Log ($script:T.RemPortFail -f $pPort, $_) "WARN"
+                # The spooler can hold a port for a few seconds after Remove-Printer (seen with
+                # queues that had a stuck job on an offline device), so retry before warning.
+                for ($try = 1; $try -le 3; $try++) {
+                    try {
+                        Remove-PrinterPort -Name $pPort -ErrorAction Stop
+                        Write-Log ($script:T.RemPortSucc -f $pPort) "SUCCESS"
+                        break
+                    } catch {
+                        if ($try -lt 3) { Start-Sleep -Seconds 2 }
+                        else { Write-Log ($script:T.RemPortFail -f $pPort, $_) "WARN" }
+                    }
                 }
             }
         }

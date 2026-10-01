@@ -486,6 +486,33 @@ Describe "15a. Printer picker (Select-PrintersFromList)" {
     }
 }
 
+Describe "15b. Port removal retry (Remove-Printers)" {
+    It "Retries a port the spooler is still holding, then removes it" {
+        $script:portTries = 0
+        Mock Get-Printer { [PSCustomObject]@{ Name = "P" } }
+        Mock Remove-Printer { }
+        Mock Get-PrinterPort { [PSCustomObject]@{ Name = "10.0.0.9" } }
+        Mock Start-Sleep { }
+        Mock Remove-PrinterPort { $script:portTries++; if ($script:portTries -lt 3) { throw "The specified port is in use by one or more printers." } }
+
+        $r = Remove-Printers -PrinterList @([PSCustomObject]@{ Name = "P"; LocalPort = "10.0.0.9" }) -Force
+
+        $r.Success | Should -Be 1
+        Should -Invoke Remove-PrinterPort -Times 3 -Exactly
+    }
+
+    It "Gives up after 3 tries with a warning instead of throwing" {
+        Mock Get-Printer { [PSCustomObject]@{ Name = "P" } }
+        Mock Remove-Printer { }
+        Mock Get-PrinterPort { [PSCustomObject]@{ Name = "10.0.0.9" } }
+        Mock Start-Sleep { }
+        Mock Remove-PrinterPort { throw "in use" }
+
+        { Remove-Printers -PrinterList @([PSCustomObject]@{ Name = "P"; LocalPort = "10.0.0.9" }) -Force } | Should -Not -Throw
+        Should -Invoke Remove-PrinterPort -Times 3 -Exactly
+    }
+}
+
 Describe "15. Reconcile-to-Desired-State (Remove-ConflictingPrinters)" {
     It "Removes an existing printer that matches by Name (different port)" {
         Mock Get-Printer { return @([PSCustomObject]@{ Name = "Reception"; PortName = "10.10.1.99" }) }
