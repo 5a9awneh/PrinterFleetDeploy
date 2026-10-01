@@ -57,6 +57,8 @@ BeforeAll {
         # Create temporary directory for test artifacts
         $script:TestTempDir = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "PM_Tests_$([System.Guid]::NewGuid().ToString('N'))"
         New-Item -ItemType Directory -Path $script:TestTempDir -Force | Out-Null
+        # Keep test output out of the real activity log.
+        $script:LogFile = Join-Path -Path $script:TestTempDir -ChildPath "test.log"
     } catch {
         Write-Host "CRITICAL ERROR IN BeforeAll: $_" -ForegroundColor Red
         throw

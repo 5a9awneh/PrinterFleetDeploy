@@ -256,7 +256,7 @@ Automated testing is configured via **GitHub Actions** (`.github/workflows/test.
 ## 🛡️ Safety & Parachute Guards
 
 - 🔁 **Reconcile, Don't Branch (know this before running):** `Add-Printers` removes any existing printer matching the CSV row's `Name` or port *before* re-adding it — intentionally, so a wrong driver, a stale different-named entry, or a duplicate all get cleaned up the same simple way instead of failing. This means it's destructive by design: pending jobs and any manually-tweaked settings on a matched printer are reset when it's recreated. A pre-change backup (below) is taken automatically so this is always recoverable.
-- 💾 **Automatic Backup Before Changes:** Every real (non-`-DryRun`) `Add-Printers` run snapshots current printers/ports/drivers to a timestamped JSON file in `PrinterStateBackups/` first.
+- 💾 **Automatic Backup Before Changes:** Every real (non-`-DryRun`) `Add-Printers` run snapshots current printers/ports/drivers to a timestamped JSON file in `PrinterStateBackups/` first (the newest 10 are kept; the activity log rotates to `PrinterManagement.log.1` at 1 MB).
 - 🪂 **Interactive Deletion Safeguards:** Removal operations require explicit confirmation (`Y/N`) before modifying the system unless `-Force` is supplied programmatically.
 - 🔍 **Pre-Execution Driver Validation:** Verifies that the required printer driver exists locally before attempting printer creation, avoiding system errors or corrupt configurations.
 - 🧹 **Controlled Spooler Restart:** Stops the print spooler safely and ensures all pending file handles are released before purging `.SPL` / `.SHD` spool files.

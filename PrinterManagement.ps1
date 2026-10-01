@@ -411,6 +411,11 @@ function Write-Log {
 
     # Append to log file
     try {
+        # PrinterFleetDeploy extension: cap growth -- past 1 MB the log moves to <name>.1 (one
+        # previous generation kept) and a fresh file starts.
+        if ((Test-Path -Path $CustomLogPath -PathType Leaf) -and ((Get-Item -Path $CustomLogPath).Length -gt 1MB)) {
+            Move-Item -Path $CustomLogPath -Destination "$CustomLogPath.1" -Force -ErrorAction SilentlyContinue
+        }
         Add-Content -Path $CustomLogPath -Value $logEntry -Encoding UTF8 -ErrorAction SilentlyContinue
     } catch {
         # Silent continue if log file write fails
@@ -831,6 +836,11 @@ function Backup-PrinterState {
         $path = Join-Path -Path $OutputDir -ChildPath ("printers-backup-{0}.json" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
         $snapshot | ConvertTo-Json -Depth 5 | Set-Content -Path $path -Encoding UTF8
         Write-Log ("Printer state backed up to '{0}' ({1} printers)." -f $path, $snapshot.Printers.Count) "SUCCESS"
+
+        # Keep only the newest 10 snapshots so repeated runs don't pile up files.
+        Get-ChildItem -Path $OutputDir -Filter "printers-backup-*.json" -File |
+            Sort-Object LastWriteTime -Descending | Select-Object -Skip 10 |
+            Remove-Item -Force -ErrorAction SilentlyContinue
         return $path
     } catch {
         Write-Log ("Failed to back up printer state: {0}" -f $_) "ERROR"

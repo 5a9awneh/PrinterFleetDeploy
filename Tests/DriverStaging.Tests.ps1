@@ -45,6 +45,8 @@ BeforeAll {
 
     $script:TestTempDir = Join-Path -Path ([System.IO.Path]::GetTempPath()) -ChildPath "PM_DriverStagingTests_$([System.Guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory -Path $script:TestTempDir -Force | Out-Null
+    # Keep test output out of the real activity log.
+    $script:LogFile = Join-Path -Path $script:TestTempDir -ChildPath "test.log"
 }
 
 AfterAll {
@@ -344,6 +346,36 @@ Describe "13. Location Wiring (Set-PrinterLocationFromCsv)" {
         Set-PrinterLocationFromCsv -Printer $printer -DryRun
 
         Should -Invoke Set-Printer -Times 0 -Exactly
+    }
+}
+
+Describe "14b. Artifact rotation" {
+    It "Rotates the activity log to <name>.1 once it passes 1 MB" {
+        $log = Join-Path -Path $script:TestTempDir -ChildPath "rot.log"
+        [System.IO.File]::WriteAllBytes($log, (New-Object byte[] (1MB + 1024)))
+
+        Write-Log -Message "after rotation" -Level "INFO" -CustomLogPath $log
+
+        Test-Path "$log.1" | Should -BeTrue
+        (Get-Item $log).Length | Should -BeLessThan 1KB
+    }
+
+    It "Keeps only the newest 10 state backups" {
+        Mock Get-Printer { @() }
+        Mock Get-PrinterPort { @() }
+        Mock Get-PrinterDriver { @() }
+        $dir = Join-Path -Path $script:TestTempDir -ChildPath "retention"
+        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        1..12 | ForEach-Object {
+            $f = Join-Path $dir ("printers-backup-old{0:D2}.json" -f $_)
+            "{}" | Set-Content $f
+            (Get-Item $f).LastWriteTime = (Get-Date).AddDays(-$_)
+        }
+
+        $new = Backup-PrinterState -OutputDir $dir
+
+        @(Get-ChildItem $dir -Filter "printers-backup-*.json").Count | Should -Be 10
+        Test-Path $new | Should -BeTrue
     }
 }
 
