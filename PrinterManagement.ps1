@@ -5,7 +5,10 @@
     Automates printer installation, removal, test page dispatch, spooler cleanup,
     and inventorying with interactive TUI, GUI dialogs, logs, and progress reporting.
 .VERSION
-    3.2.0
+    1.0.0
+.NOTES
+    PrinterFleetDeploy by Faris Khasawneh (github.com/5a9awneh).
+    Based on IamCarron/PrinterManagement v3.2.0 (Apache-2.0); see NOTICE.md.
 #>
 
 # Load Windows Forms for GUI dialogs if available

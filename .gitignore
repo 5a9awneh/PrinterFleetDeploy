@@ -11,11 +11,19 @@ Drivers/**
 
 # ---- Logs, exports, and other local run artifacts ----
 *.log
+*.log.*
 PrinterManagement.log
 *.xlsx
 # Backup-PrinterState snapshots (real machine/printer names)
 PrinterStateBackups/
 
-# ---- OS/editor cruft ----
+# ---- OS/editor cruft and temp files ----
 Thumbs.db
 .DS_Store
+desktop.ini
+.vscode/
+.idea/
+*.suo
+*.tmp
+*.bak
+*.orig

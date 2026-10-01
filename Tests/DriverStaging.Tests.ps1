@@ -12,19 +12,19 @@
 # Define mockable stub functions for cmdlets that may be unavailable on a CI runner
 # without the PrintManagement module imported.
 if (-not (Get-Command -Name Get-PrinterDriver -ErrorAction SilentlyContinue)) {
-    function global:Get-PrinterDriver { [CmdletBinding()] param([Parameter(Position=0)]$Name, $ErrorAction) }
+    function global:Get-PrinterDriver { [CmdletBinding()] param([Parameter(Position = 0)]$Name, $ErrorAction) }
 }
 if (-not (Get-Command -Name Add-PrinterDriver -ErrorAction SilentlyContinue)) {
-    function global:Add-PrinterDriver { [CmdletBinding()] param([Parameter(Position=0)]$Name, $InfPath, $ErrorAction) }
+    function global:Add-PrinterDriver { [CmdletBinding()] param([Parameter(Position = 0)]$Name, $InfPath, $ErrorAction) }
 }
 if (-not (Get-Command -Name Set-Printer -ErrorAction SilentlyContinue)) {
-    function global:Set-Printer { [CmdletBinding()] param([Parameter(Position=0)]$Name, $Location, $ErrorAction) }
+    function global:Set-Printer { [CmdletBinding()] param([Parameter(Position = 0)]$Name, $Location, $ErrorAction) }
 }
 if (-not (Get-Command -Name Get-Printer -ErrorAction SilentlyContinue)) {
-    function global:Get-Printer { [CmdletBinding()] param([Parameter(Position=0)]$Name, $ErrorAction) }
+    function global:Get-Printer { [CmdletBinding()] param([Parameter(Position = 0)]$Name, $ErrorAction) }
 }
 if (-not (Get-Command -Name Remove-Printer -ErrorAction SilentlyContinue)) {
-    function global:Remove-Printer { [CmdletBinding()] param([Parameter(Position=0)]$Name, $ErrorAction) }
+    function global:Remove-Printer { [CmdletBinding()] param([Parameter(Position = 0)]$Name, $ErrorAction) }
 }
 if (-not (Get-Command -Name Set-PrintConfiguration -ErrorAction SilentlyContinue)) {
     function global:Set-PrintConfiguration { [CmdletBinding()] param($PrinterName, $DuplexingMode, $ErrorAction) }
@@ -33,7 +33,7 @@ if (-not (Get-Command -Name Out-GridView -ErrorAction SilentlyContinue)) {
     function global:Out-GridView { [CmdletBinding()] param([Parameter(ValueFromPipeline)]$InputObject, $Title, [switch]$PassThru) process { } }
 }
 if (-not (Get-Command -Name Get-PrinterPort -ErrorAction SilentlyContinue)) {
-    function global:Get-PrinterPort { [CmdletBinding()] param([Parameter(Position=0)]$Name, $ErrorAction) }
+    function global:Get-PrinterPort { [CmdletBinding()] param([Parameter(Position = 0)]$Name, $ErrorAction) }
 }
 
 $env:PRINTER_MANAGEMENT_TEST_MODE = "true"
@@ -186,7 +186,7 @@ NotAModel = "Should Not Appear"
 
 Describe "10b. Convention-based driver discovery (Resolve-PrinterDriver, no driver-map)" {
     BeforeAll {
-        $script:DrvRoot  = Join-Path -Path (Split-Path -Parent $script:ScriptPath) -ChildPath "Drivers"
+        $script:DrvRoot = Join-Path -Path (Split-Path -Parent $script:ScriptPath) -ChildPath "Drivers"
         $script:BrandKey = "PfdBrand_$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"
         $script:BrandRaw = "$($script:BrandKey)/KM"
         $script:BrandDir = Join-Path -Path $script:DrvRoot -ChildPath "$($script:BrandKey)-KM"
@@ -486,10 +486,10 @@ Describe "15a. Printer picker (Select-PrintersFromList)" {
 
     It "Send-TestPages (interactive) lists only installed, non-virtual printers sorted by name" {
         Mock Get-Printer { @(
-            [PSCustomObject]@{ Name = "Zeta Office"; PortName = "10.0.0.2"; DriverName = "D"; Location = "B" }
-            [PSCustomObject]@{ Name = "Microsoft Print to PDF"; PortName = "PORTPROMPT:"; DriverName = "P"; Location = "" }
-            [PSCustomObject]@{ Name = "Alpha Office"; PortName = "10.0.0.1"; DriverName = "D"; Location = "A" }
-        ) }
+                [PSCustomObject]@{ Name = "Zeta Office"; PortName = "10.0.0.2"; DriverName = "D"; Location = "B" }
+                [PSCustomObject]@{ Name = "Microsoft Print to PDF"; PortName = "PORTPROMPT:"; DriverName = "P"; Location = "" }
+                [PSCustomObject]@{ Name = "Alpha Office"; PortName = "10.0.0.1"; DriverName = "D"; Location = "A" }
+            ) }
         Mock Read-Host { }
         $script:shown = @()
         Mock Out-GridView { $script:shown += @($InputObject) }
@@ -657,9 +657,9 @@ Describe "15. Reconcile-to-Desired-State (Remove-ConflictingPrinters)" {
 
     It "Removes multiple distinct conflicting printers (one by Name, one by Port)" {
         Mock Get-Printer { return @(
-            [PSCustomObject]@{ Name = "Reception"; PortName = "10.10.1.99" }
-            [PSCustomObject]@{ Name = "Old_Reception_Name"; PortName = "10.10.1.10" }
-        ) }
+                [PSCustomObject]@{ Name = "Reception"; PortName = "10.10.1.99" }
+                [PSCustomObject]@{ Name = "Old_Reception_Name"; PortName = "10.10.1.10" }
+            ) }
         Mock Remove-Printer { return }
 
         Remove-ConflictingPrinters -Name "Reception" -PortName "10.10.1.10"
@@ -677,9 +677,9 @@ Describe "15. Reconcile-to-Desired-State (Remove-ConflictingPrinters)" {
     }
 
     It "Removes a printer whose differently-named port resolves to the same host address (e.g. PrinterLogic-style 'IP_x.x.x.x' ports)" {
-        Mock Get-Printer { return @([PSCustomObject]@{ Name = "HQA-Legacy-Name"; PortName = "IP_10.10.1.10" }) }
+        Mock Get-Printer { return @([PSCustomObject]@{ Name = "Legacy-Name"; PortName = "IP_10.10.1.10" }) }
         Mock Get-PrinterPort { return [PSCustomObject]@{ Name = "IP_10.10.1.10"; PrinterHostAddress = "10.10.1.10" } } -ParameterFilter { $Name -eq "IP_10.10.1.10" }
-        Mock Remove-Printer { return } -Verifiable -ParameterFilter { $Name -eq "HQA-Legacy-Name" }
+        Mock Remove-Printer { return } -Verifiable -ParameterFilter { $Name -eq "Legacy-Name" }
 
         Remove-ConflictingPrinters -Name "Reception" -PortName "10.10.1.10"
 

@@ -37,7 +37,7 @@ per brand usually beats listing a driver per printer.
 |---|---|---|
 | Canon | Generic Plus PCL6 (`GPlus_PCL6_Driver_V340_W64_00`) | `Driver\CNP60MA64.INF` |
 | Develop / Konica Minolta | Universal PCL (`GEUPDPCL6Win_3912030MU`) | `driver\win_x64\KOAWNJA_.inf` |
-| Sharp | UD3 (`UD3_07_PCL6_2510a`) — one universal binary confirmed to cover all of our BP-50C31 / MX-3051 / MX-5051 / DX-2500N models | `PCL6\64bit\sv0emenu.inf` |
+| Sharp | UD3 (`UD3_07_PCL6_2510a`) — one universal binary confirmed to cover the BP-50C31 / MX-3051 / MX-5051 / DX-2500N models in the example fleet | `PCL6\64bit\sv0emenu.inf` |
 
 Note none of these `.inf` files sit at the top level of their package folder — this is normal;
 it's exactly why `/subdirs` is required.
