@@ -940,10 +940,33 @@ function Set-PrinterDuplexFromCsv {
     }
 }
 
+# Lets the technician pick which CSV rows to install (Ctrl/Shift multi-select), instead of
+# installing the whole fleet file onto one machine. Returns the chosen rows; none = cancelled.
+function Select-PrintersToAdd {
+    param ([Parameter(Mandatory = $true)] [array]$PrinterList)
+
+    if (-not (Get-Command -Name Out-GridView -ErrorAction SilentlyContinue)) {
+        Write-Log "Out-GridView is unavailable on this host -- cannot show the printer picker." "ERROR"
+        return @()
+    }
+
+    $view = $PrinterList | Select-Object Name, @{ n = 'IP'; e = { $_.LocalPort } }, Brand, Model, Building, Floor |
+        Sort-Object Building, Floor, Name
+    $selected = @($view | Out-GridView -Title "Select printers to install (Ctrl/Shift for multiple), then OK" -PassThru)
+
+    return @($PrinterList | Where-Object {
+        $row = $_
+        $selected | Where-Object { $_.Name -eq $row.Name -and $_.IP -eq $row.LocalPort }
+    })
+}
+
 # Function to add printers
 function Add-Printers {
     param (
         [string]$FilePath = "",
+        # PrinterFleetDeploy extension: pick which CSV rows to install. Implied when no -FilePath
+        # is given (interactive menu); scripted -FilePath runs install every row unless -Select.
+        [switch]$Select,
         # PrinterFleetDeploy extension: preview driver staging + printer add + Location set
         # without making any real changes.
         [switch]$DryRun
@@ -963,6 +986,16 @@ function Add-Printers {
         Write-Log $script:T.AddNoValid "WARN"
         if (-not $FilePath) { Read-Host -Prompt $script:T.PressEnter }
         return @{ Total = 0; Success = 0; Failed = 0 }
+    }
+
+    $interactive = [string]::IsNullOrWhiteSpace($FilePath)
+    if ($Select -or $interactive) {
+        $printerList = @(Select-PrintersToAdd -PrinterList $printerList)
+        if ($printerList.Count -eq 0) {
+            Write-Log "No printers selected -- nothing to install." "WARN"
+            if ($interactive) { Read-Host -Prompt $script:T.PressEnter }
+            return @{ Total = 0; Success = 0; Failed = 0 }
+        }
     }
 
     $total = $printerList.Count

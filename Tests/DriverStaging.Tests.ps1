@@ -29,6 +29,9 @@ if (-not (Get-Command -Name Remove-Printer -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command -Name Set-PrintConfiguration -ErrorAction SilentlyContinue)) {
     function global:Set-PrintConfiguration { [CmdletBinding()] param($PrinterName, $DuplexingMode, $ErrorAction) }
 }
+if (-not (Get-Command -Name Out-GridView -ErrorAction SilentlyContinue)) {
+    function global:Out-GridView { [CmdletBinding()] param([Parameter(ValueFromPipeline)]$InputObject, $Title, [switch]$PassThru) process { } }
+}
 if (-not (Get-Command -Name Get-PrinterPort -ErrorAction SilentlyContinue)) {
     function global:Get-PrinterPort { [CmdletBinding()] param([Parameter(Position=0)]$Name, $ErrorAction) }
 }
@@ -425,6 +428,47 @@ Describe "14. Printer State Backup (Backup-PrinterState)" {
 
         $path | Should -Not -BeNullOrEmpty
         (Get-Content -Path $path -Raw | ConvertFrom-Json).Printers.Count | Should -Be 0
+    }
+}
+
+Describe "15a. Add-time picker (Select-PrintersToAdd)" {
+    BeforeAll {
+        $script:Rows = @(
+            [PSCustomObject]@{ Name = "A"; LocalPort = "10.0.0.1"; Brand = "Canon"; Model = "m"; Building = "B"; Floor = "1" }
+            [PSCustomObject]@{ Name = "B"; LocalPort = "10.0.0.2"; Brand = "Sharp"; Model = "m"; Building = "A"; Floor = "0" }
+            [PSCustomObject]@{ Name = "C"; LocalPort = "10.0.0.3"; Brand = "Sharp"; Model = "m"; Building = "A"; Floor = "2" }
+        )
+    }
+
+    It "Returns only the rows the user picked, as the original objects" {
+        Mock Out-GridView { $InputObject | Where-Object { $_.Name -in @("B", "C") } }
+        $r = @(Select-PrintersToAdd -PrinterList $script:Rows)
+        $r.Name | Should -Be @("B", "C")
+        $r[0].LocalPort | Should -Be "10.0.0.2"
+    }
+
+    It "Returns nothing when the user cancels" {
+        Mock Out-GridView { }
+        @(Select-PrintersToAdd -PrinterList $script:Rows).Count | Should -Be 0
+    }
+
+    It "Add-Printers -Select installs only the picked rows and nothing when cancelled" {
+        $csv = Join-Path -Path $script:TestTempDir -ChildPath "pick.csv"
+        "Name;LocalPort;DriverName`nA;10.0.0.1;D1`nB;10.0.0.2;D1" | Set-Content -Path $csv -Encoding UTF8
+        Mock Get-Printer { @() }
+        Mock Get-PrinterPort { [PSCustomObject]@{ Name = "x" } }
+        Mock Get-PrinterDriver { [PSCustomObject]@{ Name = "D1" } }
+        Mock Add-Printer { }
+        Mock Set-PrintConfiguration { }
+        Mock Backup-PrinterState { }
+
+        Mock Out-GridView { $InputObject | Where-Object { $_.Name -eq "B" } }
+        $r = Add-Printers -FilePath $csv -Select
+        $r.Total | Should -Be 1
+        Should -Invoke Add-Printer -Times 1 -Exactly -ParameterFilter { $Name -eq "B" }
+
+        Mock Out-GridView { }
+        (Add-Printers -FilePath $csv -Select).Total | Should -Be 0
     }
 }
 
