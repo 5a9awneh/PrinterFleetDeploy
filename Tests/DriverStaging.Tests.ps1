@@ -179,6 +179,39 @@ NotAModel = "Should Not Appear"
     }
 }
 
+Describe "10b. Convention-based driver discovery (Resolve-PrinterDriver, no driver-map)" {
+    BeforeAll {
+        $script:DrvRoot  = Join-Path -Path (Split-Path -Parent $script:ScriptPath) -ChildPath "Drivers"
+        $script:BrandKey = "PfdBrand_$([System.Guid]::NewGuid().ToString('N').Substring(0,8))"
+        $script:BrandRaw = "$($script:BrandKey)/KM"
+        $script:BrandDir = Join-Path -Path $script:DrvRoot -ChildPath "$($script:BrandKey)-KM"
+        $pkg = Join-Path -Path $script:BrandDir -ChildPath "PkgA"
+        New-Item -ItemType Directory -Path $pkg -Force | Out-Null
+        @'
+[Manufacturer]
+%Acme% = Acme,NTamd64
+[Acme.NTamd64]
+"Acme Convention PCL" = DRV,USBPRINT\Acme
+'@ | Set-Content -Path (Join-Path $pkg "acme.inf") -Encoding ASCII
+        $script:NoMap = Join-Path -Path $script:TestTempDir -ChildPath "no_such_map.csv"
+    }
+    AfterAll { Remove-Item -Path $script:BrandDir -Recurse -Force -ErrorAction SilentlyContinue }
+    BeforeEach { $script:DriverMapCache = $null }
+
+    It "Finds Drivers\<Brand>\<package> and the .inf name from Brand alone ('/' becomes '-')" {
+        $r = Resolve-PrinterDriver -Printer ([PSCustomObject]@{ Name = "T"; Brand = $script:BrandRaw; DriverName = ""; DriverFolder = "" }) -DriverMapPath $script:NoMap
+        $r.DriverName | Should -Be "Acme Convention PCL"
+        $r.DriverFolder | Should -Be "$($script:BrandKey)-KM/PkgA"
+    }
+
+    It "Returns `$null when the brand folder holds more than one package" {
+        New-Item -ItemType Directory -Path (Join-Path $script:BrandDir "PkgB") -Force | Out-Null
+        $r = Resolve-PrinterDriver -Printer ([PSCustomObject]@{ Name = "T"; Brand = $script:BrandRaw; DriverName = ""; DriverFolder = "" }) -DriverMapPath $script:NoMap
+        Remove-Item (Join-Path $script:BrandDir "PkgB") -Recurse -Force
+        $r | Should -BeNullOrEmpty
+    }
+}
+
 Describe "11. Driver Presence Check (Test-DriverInstalled)" {
     It "Returns `$true when Get-PrinterDriver finds a match" {
         Mock Get-PrinterDriver { return [PSCustomObject]@{ Name = "Canon Generic Plus PCL6" } }

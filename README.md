@@ -30,7 +30,7 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
     - [3. Launch with Administrator Privileges](#3-launch-with-administrator-privileges)
   - [📊 CSV File Specifications](#-csv-file-specifications)
     - [Sample `printers.csv` (see `config/printers.sample.csv`):](#sample-printerscsv-see-configprinterssamplecsv)
-  - [🔌 Driver Auto-Staging (`driver-map.csv`)](#-driver-auto-staging-driver-mapcsv)
+  - [🔌 Driver Auto-Staging](#-driver-auto-staging)
   - [📍 Location Wiring](#-location-wiring)
   - [🔄 Duplex Printing](#-duplex-printing)
   - [🧪 Automated Unit Tests](#-automated-unit-tests)
@@ -117,8 +117,7 @@ cd PrinterFleetDeploy
 
 ### 2. Bring Your Own Data (never committed to git)
 - Copy [`config/printers.sample.csv`](config/printers.sample.csv) to `config/printers.csv` and fill in your real inventory.
-- Copy [`config/driver-map.sample.csv`](config/driver-map.sample.csv) to `config/driver-map.csv` and fill in your real `Brand → DriverName/DriverFolder` mappings (see [Driver Auto-Staging](#-driver-auto-staging-driver-mapcsv)).
-- Extract your vendors' driver packages under `Drivers/<Brand>/<PackageFolder>/` — see [`Drivers/README.md`](Drivers/README.md) for layout and sourcing guidance.
+- Extract your vendors' driver packages to `Drivers/<Brand>/<Package>/` (the folder name matches the `Brand` column), see [`Drivers/README.md`](Drivers/README.md). Only add a `config/driver-map.csv` (from [the sample](config/driver-map.sample.csv)) for exceptions, see [Driver Auto-Staging](#-driver-auto-staging).
 - All of the above are covered by `.gitignore` — real inventory and driver binaries never touch git history.
 
 ### 3. Launch with Administrator Privileges
@@ -143,7 +142,7 @@ aliases (`Printer Name`/`PrinterName`/`Name`, `IP Address`/`Port`/`LocalPort`). 
 | :--- | :--- | :--- |
 | **`Name`** | Yes | Display name for the printer in Windows. |
 | **`LocalPort`** | Yes | Port identifier (IPv4 address, hostname, UNC path, or USB/local port). |
-| **`Brand`** | No\* | Looked up in `config/driver-map.csv` to resolve `DriverName`/`DriverFolder`. |
+| **`Brand`** | No\* | Matched to `Drivers/<Brand>/` by convention (or an override row in `config/driver-map.csv`) to resolve the driver. |
 | **`DriverName`** | No\* | Exact registered driver name (`Get-PrinterDriver`). Overrides the `Brand` lookup if present. |
 | **`DriverFolder`** | No\* | Path under `Drivers/` to stage from if the driver isn't installed yet. Overrides the `Brand` lookup if present. |
 | **`Model`** | No | Informational only — not used in any staging/install logic. |
@@ -165,31 +164,32 @@ Warehouse - Labels,USB001,,ZDesigner ZD420-203dpi ZPL,Zebra ZD420,Warehouse,0,Si
 
 ---
 
-## 🔌 Driver Auto-Staging (`driver-map.csv`)
+## 🔌 Driver Auto-Staging
 
-Real-world driver consolidation tends to land on **one driver per brand** (most vendors now ship
-a single "universal"/"unified" PCL6 driver covering many models), so repeating a driver name on
-every CSV row is needless duplication. `config/driver-map.csv` (see
-[`config/driver-map.sample.csv`](config/driver-map.sample.csv)) maps `Brand → DriverName,DriverFolder`:
+**No configuration needed.** Put each vendor's extracted driver package at
+`Drivers/<Brand>/<Package>/` and set the printer's `Brand` in `printers.csv`. The script finds
+the folder (case-insensitive; characters illegal in folder names become `-`, so `Develop/KM`
+maps to `Drivers/Develop-KM/`), reads the driver name from the package's `.inf` files, stages it
+with `pnputil`, and registers it with the print spooler.
+
+`config/driver-map.csv` is an **optional exceptions file** for the cases convention can't decide:
+brand aliases, a brand folder holding several packages, or a package declaring many model names.
+A row there always wins over convention (see
+[`config/driver-map.sample.csv`](config/driver-map.sample.csv)):
 
 ```csv
 Brand,DriverName,DriverFolder
 Canon,Canon Generic Plus PCL6,Canon/GPlus_PCL6_Driver_V340_W64_00
-Develop/KM,KONICA MINOLTA Universal PCL,Konica-Develop/GEUPDPCL6Win_3912030MU
-Sharp,SHARP UD3 PCL6,Sharp/UD3_07_PCL6_2510a
 ```
 
-- **`DriverName`** is optional. Leave it blank and the script reads the driver's name straight from
-  the package's `.inf` (no install needed) when it declares a single name. Set it explicitly only
-  for packages that list many models, or to override. It must match the name in the `.inf`.
-- **`DriverFolder`** is a path relative to `Drivers/` (the top-level extracted package folder, not
-  the exact `.inf` path) — see [`Drivers/README.md`](Drivers/README.md) for layout and sourcing.
-- Matching on `Brand` is case/whitespace-tolerant, and a row's own `DriverName`/`DriverFolder`
-  always wins over the `Brand` lookup.
-- When a printer's driver isn't already installed, `Add-Printers` automatically runs
-  `pnputil /add-driver "Drivers\<Folder>\*.inf" /subdirs /install` before creating the printer —
-  no manual pre-staging step required. Use `Add-Printers -DryRun` to preview exactly what would be
-  staged/installed/located without making any changes.
+- **`DriverName`** may be left blank; it is then read from the `.inf` when the package declares a
+  single name (or one name plus versioned variants).
+- **`DriverFolder`** is a path relative to `Drivers/`, the top-level extracted package folder. See
+  [`Drivers/README.md`](Drivers/README.md) for layout and sourcing.
+- A row's own `DriverName`/`DriverFolder` in `printers.csv` beats the map, which beats convention.
+- When a driver isn't installed yet, `Add-Printers` runs
+  `pnputil /add-driver "Drivers\<Folder>\*.inf" /subdirs /install` before creating the printer. Use
+  `Add-Printers -DryRun` to preview without changing anything.
 
 ---
 

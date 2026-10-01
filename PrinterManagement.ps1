@@ -698,6 +698,21 @@ function Resolve-PrinterDriver {
         }
     }
 
+    # No folder from the row or driver-map: discover Drivers\<Brand>\<single package> by convention.
+    # Illegal filename characters in Brand become '-' (e.g. 'Develop/KM' -> 'Develop-KM').
+    if ([string]::IsNullOrWhiteSpace($driverFolder) -and -not [string]::IsNullOrWhiteSpace($Printer.Brand)) {
+        $safeBrand = ($Printer.Brand.ToString().Trim() -replace '[\\/:*?"<>|]', '-')
+        $baseDir   = if ($PSScriptRoot) { $PSScriptRoot } else { "." }
+        $brandDir  = Join-Path -Path (Join-Path -Path $baseDir -ChildPath "Drivers") -ChildPath $safeBrand
+        if (Test-Path -Path $brandDir -PathType Container) {
+            $pkgs = @(Get-ChildItem -Path $brandDir -Directory)
+            if ($pkgs.Count -eq 1) { $driverFolder = "$safeBrand/$($pkgs[0].Name)" }
+            elseif ($pkgs.Count -gt 1) {
+                Write-Log ("Drivers\{0} has {1} packages -- add a row to config/driver-map.csv to pick one." -f $safeBrand, $pkgs.Count) "WARN"
+            }
+        }
+    }
+
     # DriverName blank but a folder is known: read it from the .inf when it declares exactly one.
     if ([string]::IsNullOrWhiteSpace($driverName) -and -not [string]::IsNullOrWhiteSpace($driverFolder)) {
         $found = @(Get-InfDriverNames -DriverFolder $driverFolder | Sort-Object Length)
