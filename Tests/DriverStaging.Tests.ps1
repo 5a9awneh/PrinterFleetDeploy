@@ -518,6 +518,36 @@ Describe "15a. Printer picker (Select-PrintersFromList)" {
     }
 }
 
+Describe "15c. Audit regressions" {
+    It "Add-Printers keeps an existing printer when its replacement's driver can't be installed" {
+        $csv = Join-Path -Path $script:TestTempDir -ChildPath "keep_existing.csv"
+        "Name;LocalPort;DriverName`nExisting;10.9.9.9;Missing Driver" | Set-Content -Path $csv -Encoding UTF8
+        Mock Backup-PrinterState { }
+        Mock Get-Printer { [PSCustomObject]@{ Name = "Existing"; PortName = "10.9.9.9" } }
+        Mock Get-PrinterPort { [PSCustomObject]@{ Name = "10.9.9.9" } }
+        Mock Get-PrinterDriver { $null }
+        Mock Remove-Printer { }
+        Mock Add-Printer { }
+
+        $r = Add-Printers -FilePath $csv
+
+        $r.Failed | Should -Be 1
+        Should -Invoke Remove-Printer -Times 0 -Exactly
+        Should -Invoke Add-Printer -Times 0 -Exactly
+    }
+
+    It "Resolve-PrinterDriver takes the folder from driver-map.csv even when the row sets DriverName" {
+        $map = Join-Path -Path $script:TestTempDir -ChildPath "map_folder.csv"
+        "Brand,DriverName,DriverFolder`nAcmeX,,AcmeX/Pkg" | Set-Content -Path $map -Encoding UTF8
+        $script:DriverMapCache = $null
+
+        $r = Resolve-PrinterDriver -Printer ([PSCustomObject]@{ Name = "T"; Brand = "AcmeX"; DriverName = "Row Driver"; DriverFolder = "" }) -DriverMapPath $map
+
+        $r.DriverName | Should -Be "Row Driver"
+        $r.DriverFolder | Should -Be "AcmeX/Pkg"
+    }
+}
+
 Describe "15b. Port removal retry (Remove-Printers)" {
     It "Retries a port the spooler is still holding, then removes it" {
         $script:portTries = 0

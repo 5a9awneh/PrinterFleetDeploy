@@ -695,7 +695,7 @@ function Resolve-PrinterDriver {
     $driverName   = $Printer.DriverName
     $driverFolder = $Printer.DriverFolder
 
-    if ([string]::IsNullOrWhiteSpace($driverName) -and -not [string]::IsNullOrWhiteSpace($Printer.Brand)) {
+    if (([string]::IsNullOrWhiteSpace($driverName) -or [string]::IsNullOrWhiteSpace($driverFolder)) -and -not [string]::IsNullOrWhiteSpace($Printer.Brand)) {
         if (-not $script:DriverMapCache) {
             $script:DriverMapCache = Import-DriverMap -Path $DriverMapPath
         }
@@ -1084,11 +1084,6 @@ function Add-Printers {
             continue
         }
 
-        # PrinterFleetDeploy extension: reconcile to desired state -- remove any existing
-        # printer matching this row's Name or Port (wrong driver, different name, duplicates,
-        # all handled the same way) so the fresh Add-Printer below always succeeds.
-        Remove-ConflictingPrinters -Name $pName -PortName $pPort -DryRun:$DryRun
-
         # Create Port if needed
         $portExists = Get-PrinterPort -Name $pPort -ErrorAction SilentlyContinue
         if (-not $portExists) {
@@ -1129,6 +1124,12 @@ function Add-Printers {
                 continue
             }
         }
+
+        # PrinterFleetDeploy extension: reconcile to desired state -- remove any existing
+        # printer matching this row's Name or Port (wrong driver, different name, duplicates,
+        # all handled the same way) so the fresh Add-Printer below always succeeds. Done only
+        # AFTER the driver and port are confirmed, so a failed staging can't delete a working printer.
+        Remove-ConflictingPrinters -Name $pName -PortName $pPort -DryRun:$DryRun
 
         # Add Printer
         if ($DryRun) {
