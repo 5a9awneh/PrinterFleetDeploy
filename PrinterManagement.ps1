@@ -964,7 +964,9 @@ function Get-DefaultPrintersCsv {
 function Select-PrintersFromList {
     param (
         [Parameter(Mandatory = $true)] [array]$PrinterList,
-        [string]$Title = "Select printers (Ctrl/Shift for multiple), then OK"
+        [string]$Title = "Select printers (Ctrl/Shift for multiple), then OK",
+        # Columns shown in the grid; must include Name and an 'IP' column (used to match picks back).
+        [object[]]$Property = @('Name', @{ n = 'IP'; e = { $_.LocalPort } }, 'Brand', 'Model', 'Building', 'Floor')
     )
 
     if (-not (Get-Command -Name Out-GridView -ErrorAction SilentlyContinue)) {
@@ -972,8 +974,7 @@ function Select-PrintersFromList {
         return @()
     }
 
-    $view = $PrinterList | Select-Object Name, @{ n = 'IP'; e = { $_.LocalPort } }, Brand, Model, Building, Floor |
-        Sort-Object Building, Floor, Name
+    $view = $PrinterList | Select-Object -Property $Property | Sort-Object Name
     $selected = @($view | Out-GridView -Title $Title -PassThru)
 
     return @($PrinterList | Where-Object {
@@ -1188,16 +1189,9 @@ function Remove-Printers {
             $printersToRemove = @(Import-SmartCsv -Path $printersFile)
         } elseif ($subOption -eq "2") {
             try {
-                # PrinterFleetDeploy extension: surface Location and sort by it so a tech can
-                # visually navigate a large fleet by building/floor; falls back to plain Name
-                # sort when Location was never set (keeps upstream's behavior for minimal fleets).
-                $installed = Get-CimInstance -ClassName Win32_Printer | Select-Object Name, PortName, DriverName, Location
-                $hasLocationData = [bool]($installed | Where-Object { -not [string]::IsNullOrWhiteSpace($_.Location) })
-                if ($hasLocationData) {
-                    $installed = $installed | Sort-Object Location, Name
-                } else {
-                    $installed = $installed | Sort-Object Name
-                }
+                # PrinterFleetDeploy extension: show Location, sorted by name like every other
+                # picker so the list order is predictable.
+                $installed = Get-CimInstance -ClassName Win32_Printer | Select-Object Name, PortName, DriverName, Location | Sort-Object Name
                 $selected = $installed | Out-GridView -Title $script:T.RemGridTitle -PassThru
                 if ($selected) {
                     $printersToRemove = @($selected | ForEach-Object {
@@ -1310,17 +1304,23 @@ function Send-TestPages {
     } elseif (-not [string]::IsNullOrWhiteSpace($FilePath)) {
         $printersToTest = @(Import-SmartCsv -Path $FilePath)
     } else {
+        # Interactive: offer what is actually installed on this machine (a test page for a printer
+        # that isn't installed can only fail). Virtual printers (PDF/OneNote/XPS, ':' ports) are
+        # hidden, except real LPT/COM ports.
         $interactive = $true
-        $printersFile = Get-ValidFilePath -Title "Select CSV File for Test Pages" -DefaultPath (Get-DefaultPrintersCsv)
-        if (-not $printersFile) {
+        $installedPrinters = @(Get-Printer -ErrorAction SilentlyContinue |
+            Where-Object { $_.PortName -notmatch ':$' -or $_.PortName -match '^(LPT|COM)\d' } |
+            ForEach-Object { [PSCustomObject]@{ Name = $_.Name; LocalPort = $_.PortName; DriverName = $_.DriverName; Location = $_.Location } })
+        if ($installedPrinters.Count -eq 0) {
+            Write-Log "No installed printers found to test." "WARN"
             Read-Host -Prompt $script:T.PressEnter
             return @{ Total = 0; Success = 0; Failed = 0 }
         }
-        $printersToTest = @(Import-SmartCsv -Path $printersFile)
+        $printersToTest = $installedPrinters
     }
 
     if (($Select -or $interactive) -and $printersToTest.Count -gt 0) {
-        $printersToTest = @(Select-PrintersFromList -PrinterList $printersToTest -Title "Select printers to send a TEST PAGE to (Ctrl/Shift for multiple), then OK")
+        $printersToTest = @(Select-PrintersFromList -PrinterList $printersToTest -Title "Select printers to send a TEST PAGE to (Ctrl/Shift for multiple), then OK" -Property @('Name', @{ n = 'IP'; e = { $_.LocalPort } }, 'DriverName', 'Location'))
         if ($printersToTest.Count -eq 0) {
             Write-Log "No printers selected -- nothing to test." "WARN"
             if ($interactive) { Read-Host -Prompt $script:T.PressEnter }

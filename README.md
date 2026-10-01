@@ -56,7 +56,7 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 - 📜 **Centralized Activity Logging:** Every operation, warning, success, and error is recorded with timestamps in `PrinterManagement.log`.
 - 🌐 **Cross-PowerShell Compatibility:** 100% pure ASCII user interface and robust encoding protection, compatible with Windows PowerShell 5.1 and modern PowerShell 7+ (pwsh).
 - 🔌 **Driver Auto-Staging:** Finds each printer's driver by convention (`Drivers/<Brand>/<Package>/`, name read from the `.inf`), with optional overrides in `config/driver-map.csv`, and stages it with `pnputil /add-driver ... /subdirs /install` when it isn't already installed.
-- ✅ **Pick What To Act On:** The CSV-driven menu actions (Add Printers, Send Test Pages, and Remove Printers' CSV option) auto-detect `config/printers.csv` (Enter to accept, or type a path/`b` to browse). Add and Test Pages then show a grid of the CSV's printers (sorted by Building/Floor) so you choose only the ones you need, with Ctrl/Shift multi-select. Scripted runs with `-FilePath` process every row; add `-Select` to get the picker there too.
+- ✅ **Pick What To Act On:** Add Printers auto-detects `config/printers.csv` (Enter to accept, or type a path/`b` to browse) and shows a grid of its printers so you install only the ones you need. Send Test Pages and Remove Printers (option 2) show the printers actually installed on this machine (virtual PDF/OneNote/XPS printers hidden from test pages). Every grid is sorted by printer name and supports Ctrl/Shift multi-select. Scripted runs with `-FilePath` process every row; add `-Select` to get the picker there too.
 - 📍 **Location Wiring:** Sets the Windows printer `Location` property from a `Location` column, or composes it from `Building`/`Floor` — and the `Remove-Printers` picker sorts by `Location` so a large fleet is easy to navigate visually.
 - 🔄 **Reconcile-to-Desired-State:** Before adding a printer, removes any existing printer matching that row's `Name` **or** port (wrong driver already selected, stale entry under a different name, duplicates — all handled the same way) so the fresh install always succeeds, then re-adds it clean from the CSV.
 - 💾 **Automatic Pre-Change Backup:** `Add-Printers` snapshots the current `Get-Printer`/`Get-PrinterPort`/`Get-PrinterDriver` state to a timestamped JSON file before making any changes, as a rollback reference.
@@ -207,9 +207,8 @@ shared/UNC and standard TCP/USB printers, and is purely additive — no-op when 
 columns are present.
 
 The interactive picker in `Remove-Printers` (option `[2]`) also surfaces each installed printer's
-`Location` and sorts the list by it, so you can navigate a large fleet by building/floor instead
-of scrolling an alphabetical `Name` list (falls back to plain `Name` sort if `Location` was never
-set on any printer).
+`Location` as a column (sorted by name like every other grid), so you can see where each one lives
+before removing it.
 
 ---
 

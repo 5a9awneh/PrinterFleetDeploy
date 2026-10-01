@@ -484,6 +484,22 @@ Describe "15a. Printer picker (Select-PrintersFromList)" {
         @(Select-PrintersFromList -PrinterList $script:Rows).Count | Should -Be 0
     }
 
+    It "Send-TestPages (interactive) lists only installed, non-virtual printers sorted by name" {
+        Mock Get-Printer { @(
+            [PSCustomObject]@{ Name = "Zeta Office"; PortName = "10.0.0.2"; DriverName = "D"; Location = "B" }
+            [PSCustomObject]@{ Name = "Microsoft Print to PDF"; PortName = "PORTPROMPT:"; DriverName = "P"; Location = "" }
+            [PSCustomObject]@{ Name = "Alpha Office"; PortName = "10.0.0.1"; DriverName = "D"; Location = "A" }
+        ) }
+        Mock Read-Host { }
+        $script:shown = @()
+        Mock Out-GridView { $script:shown += @($InputObject) }
+
+        $r = Send-TestPages
+
+        @($script:shown | ForEach-Object { $_.Name }) | Should -Be @("Alpha Office", "Zeta Office")
+        $r.Total | Should -Be 0
+    }
+
     It "Send-TestPages -Select tests only the picked printers" {
         $csv = Join-Path -Path $script:TestTempDir -ChildPath "pick_test.csv"
         "Name;LocalPort;DriverName`nA;10.0.0.1;D1`nB;10.0.0.2;D1" | Set-Content -Path $csv -Encoding UTF8
