@@ -12,28 +12,40 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 > **agnostic** — bring your own inventory CSV, your own driver packages, and your own
 > brand→driver map, and it works the same for any organization. See [Credits & Attribution](#-credits--attribution).
 
-**How `Add-Printers` handles each CSV row:**
+## 🖥️ Interactive Console
 
-```mermaid
-flowchart TD
-    A[printers.csv row] --> B{UNC share?}
-    B -- yes --> H
-    B -- no --> C[Resolve driver: row > driver-map > Drivers/Brand/Package]
-    C --> D[Create port if missing]
-    D --> E{Driver installed?}
-    E -- no --> F[Stage with pnputil and Add-PrinterDriver]
-    F --> G{Driver verified?}
-    G -- no --> X[Skip row, count as failed]
-    E -- yes --> H[Remove conflicting printers by name, port or host]
-    G -- yes --> H
-    H --> I[Add-Printer]
-    I --> J[Set Location and Duplex]
-    J --> OK[Printer at desired state]
+```text
+  ===========================================================================
+   ___  ___  ___  _  _  _____  ___  ___    ___  _     ___  ___  _____
+  | _ \| _ \|_ _|| \| ||_   _|| __|| _ \  | __|| |   | __|| __||_   _|
+  |  _/|   / | | | .` |  | |  | _| |   /  | _| | |__ | _| | _|   | |
+  |_|  |_|_\|___||_|\_|  |_|  |___||_|_\  |_|  |____||___||___|  |_|
+   ___   ___  ___  _      ___  __   __
+  |   \ | __|| _ \| |    / _ \ \ \ / /
+  | |) || _| |  _/| |__ | (_) | \ V /
+  |___/ |___||_|  |____| \___/   |_|
+  ===========================================================================
+   v1.0.0 | Windows Printer Management Suite
+   by Faris Khasawneh (github.com/5a9awneh)
+   Based on IamCarron/PrinterManagement v3.2.0 (Apache-2.0)
+  ===========================================================================
 
-    classDef success fill:#2d6a2d,color:#fff,stroke:#1a3d1a
-    classDef failure fill:#8b1a1a,color:#fff,stroke:#5a0d0d
-    class OK success
-    class X failure
+   >> OPERATIONS -------------------------------------------------
+      [1]  Add Printers         Pick from CSV / TCP-IP / Shared UNC
+      [2]  Remove Printers      CSV or interactive selection
+
+   >> DIAGNOSTICS ------------------------------------------------
+      [3]  Send Test Pages      CIM dispatch with printui fallback
+      [4]  Clear Print Queue    Purge Spooler & restart service
+
+   >> SYSTEM -----------------------------------------------------
+      [5]  Inventory Printers   GUI table & CSV export
+      [6]  View Activity Log    Review recent operations
+
+   ---------------------------------------------------------------
+      [0]  Exit
+
+                         Made with <3 by Faris Khasawneh
 ```
 
 ---
@@ -41,9 +53,9 @@ flowchart TD
 ## 📑 Table of Contents
 
 - [PrinterFleetDeploy](#printerfleetdeploy)
+  - [🖥️ Interactive Console](#️-interactive-console)
   - [📑 Table of Contents](#-table-of-contents)
   - [🌟 Features](#-features)
-  - [🖥️ Interactive Console](#️-interactive-console)
   - [📋 Requirements](#-requirements)
   - [🚀 Quick Start](#-quick-start)
     - [1. Clone the Repository](#1-clone-the-repository)
@@ -83,44 +95,6 @@ flowchart TD
 - 💾 **Automatic Pre-Change Backup:** `Add-Printers` snapshots the current `Get-Printer`/`Get-PrinterPort`/`Get-PrinterDriver` state to a timestamped JSON file before making any changes, as a rollback reference.
 - 🔄 **Default Duplex Printing:** Sets each printer's default print preference to two-sided (`TwoSidedLongEdge`) via `Set-PrintConfiguration` — driver-agnostic, works the same across brands — with a per-row `Duplex` column override (`ShortEdge`/`Simplex`) for exceptions like label printers.
 - 🧪 **`-DryRun` Previews:** `Add-Printers -DryRun` previews every driver-staging, port-creation, printer-add, and Location-set action without changing anything on the system.
-
----
-
-## 🖥️ Interactive Console
-
-```text
-  ===========================================================================
-   ___  ___  ___  _  _  _____  ___  ___    ___  _     ___  ___  _____
-  | _ \| _ \|_ _|| \| ||_   _|| __|| _ \  | __|| |   | __|| __||_   _|
-  |  _/|   / | | | .` |  | |  | _| |   /  | _| | |__ | _| | _|   | |
-  |_|  |_|_\|___||_|\_|  |_|  |___||_|_\  |_|  |____||___||___|  |_|
-   ___   ___  ___  _      ___  __   __
-  |   \ | __|| _ \| |    / _ \ \ \ / /
-  | |) || _| |  _/| |__ | (_) | \ V /
-  |___/ |___||_|  |____| \___/   |_|
-  ===========================================================================
-   v1.0.0 | Windows Printer Management Suite
-   by Faris Khasawneh (github.com/5a9awneh)
-   Based on IamCarron/PrinterManagement v3.2.0 (Apache-2.0)
-  ===========================================================================
-
-   >> OPERATIONS -------------------------------------------------
-      [1]  Add Printers         Pick from CSV / TCP-IP / Shared UNC
-      [2]  Remove Printers      CSV or interactive selection
-
-   >> DIAGNOSTICS ------------------------------------------------
-      [3]  Send Test Pages      CIM dispatch with printui fallback
-      [4]  Clear Print Queue    Purge Spooler & restart service
-
-   >> SYSTEM -----------------------------------------------------
-      [5]  Inventory Printers   GUI table & CSV export
-      [6]  View Activity Log    Review recent operations
-
-   ---------------------------------------------------------------
-      [0]  Exit
-
-                         Made with <3 by Faris Khasawneh
-```
 
 ---
 
@@ -216,6 +190,30 @@ Canon,Canon Generic Plus PCL6,Canon/GPlus_PCL6_Driver_V340_W64_00
 - When a driver isn't installed yet, `Add-Printers` runs
   `pnputil /add-driver "Drivers\<Folder>\*.inf" /subdirs /install` before creating the printer. Use
   `Add-Printers -DryRun` to preview without changing anything.
+
+**How `Add-Printers` handles each CSV row:**
+
+```mermaid
+flowchart TD
+    A[printers.csv row] --> B{UNC share?}
+    B -- yes --> H
+    B -- no --> C[Resolve driver: row > driver-map > Drivers/Brand/Package]
+    C --> D[Create port if missing]
+    D --> E{Driver installed?}
+    E -- no --> F[Stage with pnputil and Add-PrinterDriver]
+    F --> G{Driver verified?}
+    G -- no --> X[Skip row, count as failed]
+    E -- yes --> H[Remove conflicting printers by name, port or host]
+    G -- yes --> H
+    H --> I[Add-Printer]
+    I --> J[Set Location and Duplex]
+    J --> OK[Printer at desired state]
+
+    classDef success fill:#2d6a2d,color:#fff,stroke:#1a3d1a
+    classDef failure fill:#8b1a1a,color:#fff,stroke:#5a0d0d
+    class OK success
+    class X failure
+```
 
 ---
 
