@@ -1,11 +1,8 @@
 # PrinterFleetDeploy
 
-[![PowerShell Tests & Quality Check](https://github.com/IamCarron/PrinterManagement/actions/workflows/test.yml/badge.svg)](https://github.com/IamCarron/PrinterManagement/actions/workflows/test.yml)
-[![PowerShell](https://img.shields.io/badge/Language-PowerShell-5391FE.svg?logo=powershell&logoColor=white)](https://microsoft.com/powershell)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011%20%2F%20Server-0078D6.svg?logo=windows&logoColor=white)](https://www.microsoft.com/windows)
-[![Tests](https://img.shields.io/badge/Tests-Pester%20v5-28A745.svg?logo=pester&logoColor=white)](https://pester.dev)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/IamCarron/PrinterManagement/pulls)
+<!-- BADGES:START -->
+[![CI](https://img.shields.io/github/actions/workflow/status/5a9awneh/PrinterFleetDeploy/test.yml?label=CI)](https://github.com/5a9awneh/PrinterFleetDeploy/actions/workflows/test.yml) [![License: Apache 2.0](https://img.shields.io/github/license/5a9awneh/PrinterFleetDeploy)](LICENSE) [![Last commit](https://img.shields.io/github/last-commit/5a9awneh/PrinterFleetDeploy)](https://github.com/5a9awneh/PrinterFleetDeploy/commits/main) [![PowerShell](https://img.shields.io/badge/Language-PowerShell-5391FE.svg?logo=powershell&logoColor=white)](https://microsoft.com/powershell) [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011%20%2F%20Server-0078D6.svg?logo=windows&logoColor=white)](https://www.microsoft.com/windows) [![Tests](https://img.shields.io/badge/tests-68%20passing-success)](Tests) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](http://makeapullrequest.com) [![Human in the Loop](https://img.shields.io/badge/human--in--the--loop-%E2%9C%93-brightgreen)](https://github.com/5a9awneh/PrinterFleetDeploy)
+<!-- BADGES:END -->
 
 Automated, robust, and enterprise-grade PowerShell automation suite for managing printers in Windows environments. Designed for System Administrators, IT Support, and DevOps to streamline bulk deployments, maintenance, diagnostics, and inventorying.
 
@@ -14,6 +11,30 @@ Automated, robust, and enterprise-grade PowerShell automation suite for managing
 > (Building/Floor) wiring on top of the original bulk-deployment tool. It is brand/model/driver
 > **agnostic** — bring your own inventory CSV, your own driver packages, and your own
 > brand→driver map, and it works the same for any organization. See [Credits & Attribution](#-credits--attribution).
+
+**How `Add-Printers` handles each CSV row:**
+
+```mermaid
+flowchart TD
+    A[printers.csv row] --> B{UNC share?}
+    B -- yes --> H
+    B -- no --> C[Resolve driver: row > driver-map > Drivers/Brand/Package]
+    C --> D[Create port if missing]
+    D --> E{Driver installed?}
+    E -- no --> F[Stage with pnputil and Add-PrinterDriver]
+    F --> G{Driver verified?}
+    G -- no --> X[Skip row, count as failed]
+    E -- yes --> H[Remove conflicting printers by name, port or host]
+    G -- yes --> H
+    H --> I[Add-Printer]
+    I --> J[Set Location and Duplex]
+    J --> OK[Printer at desired state]
+
+    classDef success fill:#2d6a2d,color:#fff,stroke:#1a3d1a
+    classDef failure fill:#8b1a1a,color:#fff,stroke:#5a0d0d
+    class OK success
+    class X failure
+```
 
 ---
 
