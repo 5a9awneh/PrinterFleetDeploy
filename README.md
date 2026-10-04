@@ -190,6 +190,11 @@ Canon,Canon Generic Plus PCL6,Canon/GPlus_PCL6_Driver_V340_W64_00
 - When a driver isn't installed yet, `Add-Printers` runs
   `pnputil /add-driver "Drivers\<Folder>\*.inf" /subdirs /install` before creating the printer. Use
   `Add-Printers -DryRun` to preview without changing anything.
+- **Expect a trust prompt and a slow driver or two.** Some publishers make Windows ask "install this
+  driver software?" once per PC (a security gate that can't be automated; it may appear behind the
+  console, so check there if a run seems frozen). Some drivers, such as HP's Universal Print Driver,
+  can take about 2 minutes per `Add-Printer`. Wait and don't press Ctrl+C; if a run is interrupted,
+  rerun it and the printer is recreated cleanly.
 
 **How `Add-Printers` handles each CSV row:**
 

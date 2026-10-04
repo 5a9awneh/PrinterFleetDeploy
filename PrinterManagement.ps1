@@ -1025,7 +1025,11 @@ function Add-Printers {
 
     $total = $printerList.Count
     Write-Log ($script:T.AddStartInst -f $total) "INFO"
-
+    # Seen live: some drivers (e.g. HP UPD) take ~2 min per Add-Printer, and some publishers
+    # (e.g. Ricoh) raise a Windows trust prompt that can sit behind this window.
+    if (-not $DryRun) {
+        Write-Log "Note: some drivers take up to ~2 min per printer, and Windows may show a driver-trust prompt (check behind this window) -- click Install and please wait; don't press Ctrl+C." "INFO"
+    }
     # PrinterFleetDeploy extension: snapshot current printer state before making any changes,
     # so this run has a rollback reference. Read-only, so skipped only for -DryRun (nothing to
     # protect against there).
